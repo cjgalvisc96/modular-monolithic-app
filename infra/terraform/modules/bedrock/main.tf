@@ -10,7 +10,7 @@ data "aws_bedrock_foundation_model" "this" {
 }
 
 locals {
-  region     = data.aws_region.current.region
+  region     = data.aws_region.current.name
   account_id = data.aws_caller_identity.current.account_id
   partition  = data.aws_partition.current.partition
 

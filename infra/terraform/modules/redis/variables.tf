@@ -4,6 +4,12 @@ variable "name" {
   default     = "todo-app"
 }
 
+variable "vpc_cidr" {
+  description = "VPC CIDR the Redis security group may send egress to (no public egress)."
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
 variable "vpc_id" {
   description = "VPC ID the Redis cluster lives in."
   type        = string

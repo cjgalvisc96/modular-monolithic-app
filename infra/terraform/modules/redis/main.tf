@@ -24,11 +24,11 @@ resource "aws_vpc_security_group_ingress_rule" "from_allowed" {
   description                  = "Allow Redis access from approved workload security groups"
 }
 
-resource "aws_vpc_security_group_egress_rule" "all" {
+resource "aws_vpc_security_group_egress_rule" "vpc" {
   security_group_id = aws_security_group.this.id
-  cidr_ipv4         = "0.0.0.0/0"
+  cidr_ipv4         = var.vpc_cidr
   ip_protocol       = "-1"
-  description       = "Allow all outbound"
+  description       = "Allow outbound within the VPC only"
 }
 
 resource "aws_elasticache_replication_group" "this" {

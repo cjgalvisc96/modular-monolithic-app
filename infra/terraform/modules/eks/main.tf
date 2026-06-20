@@ -31,6 +31,15 @@ resource "aws_iam_role_policy_attachment" "cluster_policy" {
 }
 
 ############################################
+# Customer-managed KMS key for envelope-encrypting Kubernetes secrets
+############################################
+resource "aws_kms_key" "secrets" {
+  description         = "${var.cluster_name} EKS secrets encryption"
+  enable_key_rotation = true
+  tags                = merge(var.tags, { Name = "${var.cluster_name}-secrets-kms" })
+}
+
+############################################
 # EKS cluster
 ############################################
 resource "aws_eks_cluster" "this" {
@@ -42,6 +51,16 @@ resource "aws_eks_cluster" "this" {
     subnet_ids              = concat(var.private_subnet_ids, var.public_subnet_ids)
     endpoint_public_access  = var.endpoint_public_access
     endpoint_private_access = var.endpoint_private_access
+    # Only constrain public CIDRs when public access is enabled; never 0.0.0.0/0.
+    public_access_cidrs = var.endpoint_public_access ? var.public_access_cidrs : null
+  }
+
+  # Envelope-encrypt Kubernetes secrets with the CMK above.
+  encryption_config {
+    resources = ["secrets"]
+    provider {
+      key_arn = aws_kms_key.secrets.arn
+    }
   }
 
   tags = var.tags

@@ -1,0 +1,16 @@
+# Trivy ignores for the Terraform IaC scan.
+# Each entry is a deliberate, documented architectural exception — not an
+# unreviewed suppression. Everything else is fixed in the modules.
+
+# AWS-0164 — "Subnet associates public IP address."
+# The flagged subnets are the PUBLIC subnets, which intentionally assign public
+# IPs: they host the NAT gateways and public-facing load balancers (that is the
+# definition of a public subnet). All workloads — EKS nodes, Aurora, Redis —
+# run in the PRIVATE subnets.
+AWS-0164
+
+# AWS-0011 — "Distribution does not utilize a WAF."
+# A WAFv2 Web ACL is a separately-managed, billable, per-environment resource.
+# The cdn module exposes a `web_acl_id` variable to attach one; it is not
+# hardcoded at the module level.
+AWS-0011

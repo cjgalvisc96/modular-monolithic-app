@@ -27,15 +27,21 @@ variable "public_subnet_ids" {
 }
 
 variable "endpoint_public_access" {
-  description = "Whether the EKS API server endpoint is publicly accessible."
+  description = "Whether the EKS API server endpoint is publicly accessible. Private by default."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "endpoint_private_access" {
   description = "Whether the EKS API server endpoint is privately accessible from within the VPC."
   type        = bool
   default     = true
+}
+
+variable "public_access_cidrs" {
+  description = "CIDRs allowed to reach the public API endpoint (only used when endpoint_public_access=true). Must not be 0.0.0.0/0."
+  type        = list(string)
+  default     = ["10.0.0.0/8"]
 }
 
 variable "node_instance_types" {

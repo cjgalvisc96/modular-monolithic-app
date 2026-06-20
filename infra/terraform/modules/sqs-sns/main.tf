@@ -1,6 +1,15 @@
+# Customer-managed KMS key for SNS/SQS at-rest encryption.
+resource "aws_kms_key" "this" {
+  description         = "${var.topic_name} SNS/SQS encryption"
+  enable_key_rotation = true
+  tags                = merge(var.tags, { Name = "${var.topic_name}-kms" })
+}
+
 resource "aws_sns_topic" "this" {
   name = var.topic_name
-  tags = merge(var.tags, { Name = var.topic_name })
+  # Encrypt the topic at rest with the customer-managed key.
+  kms_master_key_id = aws_kms_key.this.id
+  tags              = merge(var.tags, { Name = var.topic_name })
 }
 
 resource "aws_sqs_queue" "dlq" {

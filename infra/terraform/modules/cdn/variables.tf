@@ -4,6 +4,12 @@ variable "name" {
   default     = "todo-app"
 }
 
+variable "web_acl_id" {
+  description = "ARN of a WAFv2 Web ACL to associate (optional; attach a per-environment WAF here)."
+  type        = string
+  default     = ""
+}
+
 variable "s3_bucket_id" {
   description = "ID (name) of the S3 bucket origin."
   type        = string

@@ -17,6 +17,8 @@ resource "aws_cloudfront_distribution" "this" {
   default_root_object = var.default_root_object
   price_class         = var.price_class
   aliases             = var.aliases
+  # Optional WAFv2 Web ACL (attach a per-environment WAF via var.web_acl_id).
+  web_acl_id = var.web_acl_id != "" ? var.web_acl_id : null
 
   origin {
     domain_name              = var.s3_bucket_regional_domain_name

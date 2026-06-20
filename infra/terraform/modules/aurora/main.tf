@@ -44,11 +44,20 @@ resource "aws_vpc_security_group_ingress_rule" "from_allowed" {
   description                  = "Allow PostgreSQL access from approved workload security groups"
 }
 
-resource "aws_vpc_security_group_egress_rule" "all" {
+resource "aws_vpc_security_group_egress_rule" "vpc" {
   security_group_id = aws_security_group.this.id
-  cidr_ipv4         = "0.0.0.0/0"
+  cidr_ipv4         = var.vpc_cidr
   ip_protocol       = "-1"
-  description       = "Allow all outbound"
+  description       = "Allow outbound within the VPC only"
+}
+
+############################################
+# Customer-managed KMS key for storage encryption
+############################################
+resource "aws_kms_key" "this" {
+  description         = "${var.name} Aurora storage encryption"
+  enable_key_rotation = true
+  tags                = merge(var.tags, { Name = "${var.name}-aurora-kms" })
 }
 
 ############################################
@@ -92,6 +101,7 @@ resource "aws_rds_cluster" "this" {
   iam_database_authentication_enabled = true
 
   storage_encrypted         = true
+  kms_key_id                = aws_kms_key.this.arn
   backup_retention_period   = var.backup_retention_period
   deletion_protection       = var.deletion_protection
   skip_final_snapshot       = var.skip_final_snapshot

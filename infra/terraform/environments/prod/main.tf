@@ -87,6 +87,7 @@ module "aurora" {
 
   name                       = local.name
   vpc_id                     = module.vpc.vpc_id
+  vpc_cidr                   = module.vpc.vpc_cidr_block
   private_subnet_ids         = module.vpc.private_subnet_ids
   publicly_accessible        = false
   master_password            = var.db_master_password
@@ -104,6 +105,7 @@ module "redis" {
 
   name                       = local.name
   vpc_id                     = module.vpc.vpc_id
+  vpc_cidr                   = module.vpc.vpc_cidr_block
   private_subnet_ids         = module.vpc.private_subnet_ids
   allowed_security_group_ids = [module.eks.cluster_security_group_id]
   node_type                  = "cache.r6g.large"

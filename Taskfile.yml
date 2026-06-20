@@ -214,7 +214,7 @@ tasks:
       - sh: command -v trivy
         msg: "Trivy not found. Install: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin"
     cmds:
-      - trivy config --severity HIGH,CRITICAL --exit-code 1 {{.TF_DIR}}
+      - trivy config --severity HIGH,CRITICAL --exit-code 1 --ignorefile {{.TF_DIR}}/.trivyignore {{.TF_DIR}}
 
   terraform:costs:
     desc: 'Infracost estimate for an environment (ENV=dev|prod). Needs INFRACOST_API_KEY.'

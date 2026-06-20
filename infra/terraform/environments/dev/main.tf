@@ -74,7 +74,7 @@ module "ecr" {
   source = "../../modules/ecr"
 
   repository_name      = var.project
-  image_tag_mutability = "MUTABLE" # dev: allow tag reuse
+  image_tag_mutability = "IMMUTABLE"
   tags                 = local.tags
 }
 
@@ -86,6 +86,7 @@ module "aurora" {
 
   name                       = local.name
   vpc_id                     = module.vpc.vpc_id
+  vpc_cidr                   = module.vpc.vpc_cidr_block
   private_subnet_ids         = module.vpc.private_subnet_ids
   public_subnet_ids          = module.vpc.public_subnet_ids
   master_password            = var.db_master_password
@@ -102,6 +103,7 @@ module "redis" {
 
   name                       = local.name
   vpc_id                     = module.vpc.vpc_id
+  vpc_cidr                   = module.vpc.vpc_cidr_block
   private_subnet_ids         = module.vpc.private_subnet_ids
   allowed_security_group_ids = [module.eks.cluster_security_group_id]
   node_type                  = "cache.t4g.small"
