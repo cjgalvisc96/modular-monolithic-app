@@ -1,0 +1,199 @@
+name: Terraform
+
+on:
+  push:
+    branches: [master]
+    paths: ["infra/**", ".github/workflows/terraform.yml"]
+  pull_request:
+    paths: ["infra/**", ".github/workflows/terraform.yml"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [dev, prod]
+        default: dev
+      action:
+        description: Terraform action
+        type: choice
+        options: [plan, apply, destroy]
+        default: plan
+
+permissions:
+  contents: read
+  id-token: write        # OIDC for AWS auth
+  pull-requests: write   # Infracost PR comment
+
+concurrency:
+  group: terraform-${{ github.ref }}-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  # --- fmt + validate (no cloud creds needed) ------------------------------
+  validate:
+    name: Format + Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Install Terragrunt
+        run: |
+          sudo curl -fsSL "https://github.com/gruntwork-io/terragrunt/releases/latest/download/terragrunt_linux_amd64" -o /usr/local/bin/terragrunt
+          sudo chmod +x /usr/local/bin/terragrunt
+          terragrunt --version
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: task terraform:fmt
+      - run: task terraform:validate
+
+  # --- Trivy IaC security scan ---------------------------------------------
+  security:
+    name: Trivy IaC scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Trivy
+        run: |
+          sudo curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+          trivy --version
+      - name: Scan Terraform (task terraform:trivy)
+        run: task terraform:trivy
+
+  # --- Infracost estimate (runs only if INFRACOST_API_KEY is configured) ----
+  cost:
+    name: Infracost
+    runs-on: ubuntu-latest
+    env:
+      INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Infracost
+        if: ${{ env.INFRACOST_API_KEY != '' }}
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+      - name: Cost estimate (task terraform:costs)
+        if: ${{ env.INFRACOST_API_KEY != '' }}
+        run: task terraform:costs ENV=${{ github.event.inputs.environment || 'dev' }}
+      - name: Skipped notice
+        if: ${{ env.INFRACOST_API_KEY == '' }}
+        run: echo "INFRACOST_API_KEY not set — skipping cost estimate."
+
+  # --- terragrunt plan (PR) — runs only if AWS_ROLE_ARN is configured -------
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'plan')
+    env:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Install Terragrunt
+        run: |
+          sudo curl -fsSL "https://github.com/gruntwork-io/terragrunt/releases/latest/download/terragrunt_linux_amd64" -o /usr/local/bin/terragrunt
+          sudo chmod +x /usr/local/bin/terragrunt
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ env.AWS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: terragrunt init + plan
+        if: ${{ env.AWS_ROLE_ARN != '' }}
+        run: |
+          task terraform:init ENV=${{ env.ENVIRONMENT }}
+          task terraform:plan ENV=${{ env.ENVIRONMENT }}
+      - name: Skipped notice
+        if: ${{ env.AWS_ROLE_ARN == '' }}
+        run: echo "AWS_ROLE_ARN not set — skipping plan (configure OIDC role to enable)."
+
+  # --- terragrunt apply / destroy (manual, environment-protected) -----------
+  apply:
+    name: Apply / Destroy
+    runs-on: ubuntu-latest
+    # Disabled for now — re-enable by restoring the condition below.
+    if: false
+    # if: github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'apply' || github.event.inputs.action == 'destroy')
+    environment: ${{ github.event.inputs.environment }}   # protected env → manual approval
+    env:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ENVIRONMENT: ${{ github.event.inputs.environment }}
+      ACTION: ${{ github.event.inputs.action }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Install Terragrunt
+        run: |
+          sudo curl -fsSL "https://github.com/gruntwork-io/terragrunt/releases/latest/download/terragrunt_linux_amd64" -o /usr/local/bin/terragrunt
+          sudo chmod +x /usr/local/bin/terragrunt
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ env.AWS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: terragrunt ${{ env.ACTION }}
+        if: ${{ env.AWS_ROLE_ARN != '' }}
+        run: |
+          task terraform:init ENV=${{ env.ENVIRONMENT }}
+          task terraform:${{ env.ACTION }} ENV=${{ env.ENVIRONMENT }} AUTO_APPROVE=true
+
+  # --- Terratest (manual; needs Go + AWS) -----------------------------------
+  terratest:
+    name: Terratest
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    env:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ env.AWS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Run Terratest (task terraform:test)
+        run: task terraform:test

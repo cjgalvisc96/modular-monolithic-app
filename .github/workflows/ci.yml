@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Quality + Architecture (task check:all)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync dependencies
+        run: uv sync
+
+      # ruff + pyright + vulture + coverage(>=97%) + import-linter contracts
+      - name: Run check:all
+        run: task check:all
+
+  tests:
+    name: Tests (task test:coverage)
+    runs-on: ubuntu-latest
+
+    # Real PostgreSQL so the RLS isolation tests run (not skipped) in CI.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: todo
+          POSTGRES_PASSWORD: todo
+          POSTGRES_DB: todo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U todo -d todo"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://todo:todo@localhost:5432/todo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync dependencies
+        run: uv sync
+
+      # unit + integration + e2e with the >=97% coverage gate, parallel +
+      # randomized order, including the PostgreSQL RLS isolation tests via
+      # TEST_DATABASE_URL.
+      - name: Run test:coverage
+        run: task test:coverage

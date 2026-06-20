@@ -12,6 +12,9 @@ vars:
   SRC: "src/todo_app"
   COMPOSE: "docker compose"
   PROJECT: "todo-app"
+  TF_DIR: "infra/terraform"
+  TG_DIR: "infra/terragrunt"
+  ENV: '{{.ENV | default "dev"}}'
 
 env:
   PYTHONPATH: "src"
@@ -132,6 +135,94 @@ tasks:
       - find . -type d \( -name .terraform -o -name .terragrunt-cache \) -prune -exec rm -rf {} + 2>/dev/null || true
       # Observability stack data (Grafana/Prometheus/Tempo are Docker named volumes)
       - "{{.COMPOSE}} -f observability/docker-compose.observability.yml down -v --remove-orphans 2>/dev/null || true"
+
+  # --- terraform (infra; pass ENV=dev|prod, default dev) --------------------
+  terraform:fmt:
+    desc: Check Terraform/Terragrunt formatting
+    preconditions:
+      - sh: command -v terraform
+        msg: "Terraform not found. Install: https://developer.hashicorp.com/terraform/install"
+      - sh: command -v terragrunt
+        msg: "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/"
+    cmds:
+      - terraform fmt -check -recursive {{.TF_DIR}}
+      - terragrunt hcl format --check --working-dir {{.TG_DIR}}
+
+  terraform:validate:
+    desc: Validate every Terraform module (offline, no backend)
+    preconditions:
+      - sh: command -v terraform
+        msg: "Terraform not found. Install: https://developer.hashicorp.com/terraform/install"
+    cmds:
+      - |
+        set -e
+        for d in {{.TF_DIR}}/modules/*/; do
+          [ -f "$d/main.tf" ] || continue
+          echo "==> validate $d"
+          terraform -chdir="$d" init -backend=false -input=false -no-color >/dev/null
+          terraform -chdir="$d" validate -no-color
+        done
+
+  terraform:init:
+    desc: 'Init an environment via Terragrunt (ENV=dev|prod)'
+    preconditions:
+      - sh: command -v terragrunt
+        msg: "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/"
+    dir: '{{.TG_DIR}}/{{.ENV}}'
+    cmds:
+      - terragrunt init -input=false
+
+  terraform:plan:
+    desc: 'Plan an environment (ENV=dev|prod)'
+    preconditions:
+      - sh: command -v terragrunt
+        msg: "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/"
+    dir: '{{.TG_DIR}}/{{.ENV}}'
+    cmds:
+      - terragrunt plan -input=false -out=tfplan
+
+  terraform:apply:
+    desc: 'Apply an environment (ENV=dev|prod). Set AUTO_APPROVE=true for CI.'
+    preconditions:
+      - sh: command -v terragrunt
+        msg: "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/"
+    dir: '{{.TG_DIR}}/{{.ENV}}'
+    cmds:
+      - terragrunt apply -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}}
+
+  terraform:destroy:
+    desc: 'Destroy an environment (ENV=dev|prod). Set AUTO_APPROVE=true for CI.'
+    preconditions:
+      - sh: command -v terragrunt
+        msg: "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/"
+    dir: '{{.TG_DIR}}/{{.ENV}}'
+    cmds:
+      - terragrunt destroy -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}}
+
+  terraform:test:
+    desc: Run Terratest infra tests (Go) for the Helm/Terraform layer
+    dir: infra/tests/terratest
+    preconditions:
+      - sh: command -v go
+        msg: "Go not found (needed for Terratest). Install: https://go.dev/doc/install  •  snap: sudo snap install go --classic"
+    cmds:
+      - go test -v -timeout 30m ./...
+
+  terraform:trivy:
+    desc: Trivy IaC misconfiguration scan of the Terraform code
+    preconditions:
+      - sh: command -v trivy
+        msg: "Trivy not found. Install: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin"
+    cmds:
+      - trivy config --severity HIGH,CRITICAL --exit-code 1 {{.TF_DIR}}
+
+  terraform:costs:
+    desc: 'Infracost estimate for an environment (ENV=dev|prod). Needs INFRACOST_API_KEY.'
+    preconditions:
+      - sh: command -v infracost
+        msg: "Infracost not found. Install: curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh  •  then: infracost auth login"
+    cmds:
+      - infracost breakdown --path {{.TF_DIR}}/environments/{{.ENV}}
 
   # --- docker ---------------------------------------------------------------
   docker:up:
