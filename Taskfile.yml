@@ -217,12 +217,14 @@ tasks:
       - trivy config --severity HIGH,CRITICAL --exit-code 1 --ignorefile {{.TF_DIR}}/.trivyignore {{.TF_DIR}}
 
   terraform:costs:
-    desc: 'Infracost estimate for an environment (ENV=dev|prod). Needs INFRACOST_API_KEY.'
+    desc: 'Infracost estimate for an environment (ENV=dev|prod). First run prompts a free login.'
     preconditions:
       - sh: command -v infracost
-        msg: "Infracost not found. Install: curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh  •  then: infracost auth login"
+        msg: "Infracost not found. Install: curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh"
     cmds:
-      - infracost breakdown --path {{.TF_DIR}}/environments/{{.ENV}}
+      # `scan` replaces the deprecated `breakdown`; path is positional.
+      # If unauthenticated, infracost itself prompts the free browser login.
+      - infracost scan {{.TF_DIR}}/environments/{{.ENV}}
 
   # --- docker ---------------------------------------------------------------
   docker:up:
