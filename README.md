@@ -11,7 +11,7 @@ See [`plan.md`](plan.md), [`project-structure.md`](project-structure.md), and
 ## Quick start
 
 ```bash
-task create_venv      # bootstrap venv + deps (uv), copy .env
+task env:create      # bootstrap venv + deps (uv), copy .env
 task docker:up        # app + postgres + redis, waits for healthy
 open http://localhost:8000/docs
 ```
@@ -33,9 +33,9 @@ open http://localhost:8000/docs
 
 ## Architecture guarantees (enforced)
 
-- **Layer direction** and **context isolation** — `task ensure_architecture` (import-linter).
+- **Layer direction** and **context isolation** — `task check:architecture` (import-linter).
 - **Tenant isolation** — JWT `tenant_id` claim → `SET LOCAL app.tenant_id` → PostgreSQL RLS.
-- **Quality gate** — `task ensure_quality` (ruff, pyright, vulture, ≥97% coverage).
+- **Quality gate** — `task check:quality` (ruff, pyright, vulture, ≥97% coverage).
 
 ## Tooling
 

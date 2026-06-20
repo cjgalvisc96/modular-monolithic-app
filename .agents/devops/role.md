@@ -14,7 +14,7 @@ CI — all under least-privilege IAM via IRSA, with infra tested like applicatio
 - Maintain Terraform modules (`infra/terraform/modules/`) and Terragrunt env composition
   (`infra/terragrunt/`), including the Cognito module (user pool, app client, pre-token Lambda) and
   the IAM module (one scoped IRSA role per workload).
-- Wire CI gates: `task ensure_quality`, `task ensure_architecture`, `task coverage`,
+- Wire CI gates: `task check:quality`, `task check:architecture`, `task test:coverage`,
   `terraform validate`, Terratest, Trivy, Infracost.
 - Keep secrets in Secrets Manager — never hardcoded.
 

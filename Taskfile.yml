@@ -1,7 +1,11 @@
 version: "3"
 
 # Central command runner for the TODO modular monolith.
-# Run `task help` (or just `task`) to list available commands.
+# Tasks follow a `scope:action` naming convention (env / check / fix / test /
+# docker / clean). Run `task` or `task help` to list everything.
+#
+# Every Python tool is invoked through `uv run` (var PY) — Python is never
+# executed directly.
 
 vars:
   PY: "uv run"
@@ -25,7 +29,8 @@ tasks:
     cmds:
       - task --list-all
 
-  check-deps:
+  # --- deps -----------------------------------------------------------------
+  deps:check:
     desc: Guard — verify required tools are installed before running commands
     internal: true
     cmds:
@@ -39,66 +44,99 @@ tasks:
           exit 1
         fi
 
-  create_venv:
-    desc: Bootstrap the virtualenv and sync all dependency groups
-    deps: [check-deps]
+  # --- env ------------------------------------------------------------------
+  env:create:
+    desc: Bootstrap the virtualenv and sync all dependency groups (uv)
+    deps: [deps:check]
     cmds:
       - bash scripts/create_venv.sh
 
-  linter:
-    desc: Run ruff (lint + import sort) and format check
+  # --- check (static quality gates) -----------------------------------------
+  check:linter:
+    desc: Run ruff (lint + import sort) and verify formatting
     cmds:
       - "{{.PY}} ruff check {{.SRC}} tests"
       - "{{.PY}} ruff format --check {{.SRC}} tests"
 
-  format:
-    desc: Auto-fix lint issues and format code
+  check:types:
+    desc: Static type checking with pyright
     cmds:
-      - "{{.PY}} ruff check --fix {{.SRC}} tests"
-      - "{{.PY}} ruff format {{.SRC}} tests"
-
-  ensure_quality:
-    desc: Full quality gate — lint, types, dead code, coverage threshold
-    cmds:
-      - task: linter
       - "{{.PY}} pyright"
-      - "{{.PY}} vulture"
-      - task: coverage
 
-  ensure_architecture:
+  check:deadcode:
+    desc: Detect dead code with vulture
+    cmds:
+      - "{{.PY}} vulture"
+
+  check:architecture:
     desc: Enforce DDD layer + bounded-context boundaries via import-linter
     cmds:
       - "{{.PY}} lint-imports"
 
-  unit_tests:
+  check:quality:
+    desc: Full quality gate — lint, types, dead code, coverage threshold
+    cmds:
+      - task: check:linter
+      - task: check:types
+      - task: check:deadcode
+      - task: test:coverage
+
+  check:all:
+    desc: Run every gate — quality + architecture
+    cmds:
+      - task: check:quality
+      - task: check:architecture
+
+  # --- fix ------------------------------------------------------------------
+  fix:linter:
+    desc: Auto-fix lint issues and format code (ruff)
+    cmds:
+      - "{{.PY}} ruff check --fix {{.SRC}} tests"
+      - "{{.PY}} ruff format {{.SRC}} tests"
+
+  # --- test -----------------------------------------------------------------
+  test:unit:
     desc: Run the unit test suite
     cmds:
       - "{{.PY}} pytest tests/unit"
 
-  integration_tests:
-    desc: Run the integration test suite (DB-level, RLS isolation)
+  test:integration:
+    desc: Run the integration suite (DB-level; RLS test needs TEST_DATABASE_URL)
     cmds:
       - "{{.PY}} pytest tests/integration"
 
-  test:
-    desc: Run the entire test suite
+  test:e2e:
+    desc: Run the end-to-end API suite
+    cmds:
+      - "{{.PY}} pytest tests/e2e"
+
+  test:all:
+    desc: Run the entire test suite (unit + integration + e2e + architecture)
     cmds:
       - "{{.PY}} pytest"
 
-  coverage:
-    desc: Run unit + integration + e2e tests with coverage (>=97% enforced)
+  test:coverage:
+    desc: Run unit + integration + e2e with coverage (>=97% enforced)
     cmds:
       - "{{.PY}} pytest tests/unit tests/integration tests/e2e --cov --cov-report=term-missing"
 
-  remove_cache:
-    desc: Remove Python / tooling caches
+  # --- clean ----------------------------------------------------------------
+  clean:cache:
+    desc: Remove venv + all Python, tooling, infra, and observability caches
     cmds:
-      - find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-      - rm -rf .pytest_cache .ruff_cache .coverage htmlcov coverage.xml 2>/dev/null || true
+      # Virtualenv + Python tooling caches
+      - rm -rf .venv .pytest_cache .ruff_cache .import_linter_cache .coverage coverage.xml htmlcov 2>/dev/null || true
+      # __pycache__ everywhere (skip .git)
+      - find . -type d -name __pycache__ -not -path './.git/*' -prune -exec rm -rf {} + 2>/dev/null || true
+      # Terraform / Terragrunt caches
+      - find . -type d \( -name .terraform -o -name .terragrunt-cache \) -prune -exec rm -rf {} + 2>/dev/null || true
+      # Observability stack data (Grafana/Prometheus/Tempo are Docker named volumes)
+      - "{{.COMPOSE}} -f observability/docker-compose.observability.yml down -v --remove-orphans 2>/dev/null || true"
 
+  # --- docker ---------------------------------------------------------------
   docker:up:
     desc: Build and start app + Postgres + Redis (waits for healthy)
-    deps: [check-deps]
+    deps: [deps:check]
     cmds:
       - "{{.COMPOSE}} up -d --build --wait"
 

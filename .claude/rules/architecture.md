@@ -1,6 +1,6 @@
 # Rule: Architecture
 
-These are hard rules. They are enforced by `import-linter` (`task ensure_architecture`) and
+These are hard rules. They are enforced by `import-linter` (`task check:architecture`) and
 `tests/architecture/`. Do not weaken a contract to make a change pass — fix the change.
 
 ## Dependency direction

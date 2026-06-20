@@ -28,7 +28,7 @@ The repository uses [`uv`](https://docs.astral.sh/uv/) for Python dependency man
 ### 1. Bootstrap the virtual environment
 
 ```bash
-task create_venv
+task env:create
 ```
 
 This provisions the `uv`-managed virtual environment and installs the dependency groups
@@ -53,9 +53,9 @@ list of `task` targets.
 ### 3. Run the quality gates
 
 ```bash
-task ensure_quality       # ruff, pyright, vulture, coverage gate
-task ensure_architecture  # import-linter contracts (layer + context boundaries)
-task unit_tests           # the unit tier of the test pyramid
+task check:quality       # ruff, pyright, vulture, coverage gate
+task check:architecture  # import-linter contracts (layer + context boundaries)
+task test:unit           # the unit tier of the test pyramid
 ```
 
 ## Key constraints

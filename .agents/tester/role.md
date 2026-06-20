@@ -14,7 +14,7 @@ stays ≥ 97%, and the critical tenant-isolation guarantee is proven against rea
   zero rows from another tenant, even unfiltered — run against real Postgres (`TEST_DATABASE_URL`).
 - Ensure use cases are tested with in-memory fakes of repository/port interfaces, and that `ai`
   tests use a fake `LlmClient` (no live Bedrock in unit/integration).
-- Enforce the coverage gate (≥ 97%) in `task ensure_quality` / `task coverage`.
+- Enforce the coverage gate (≥ 97%) in `task check:quality` / `task test:coverage`.
 
 ## Inputs
 

@@ -5,16 +5,16 @@ Run the full pre-merge gate. This mirrors CI and must pass before any change is 
 ## Run
 
 ```bash
-task ensure_quality && task ensure_architecture && task coverage
+task check:quality && task check:architecture && task test:coverage
 ```
 
 ## What each step checks
 
 | Step | Checks |
 |------|--------|
-| `task ensure_quality` | ruff (lint/format, line length 100), pyright (types), vulture (dead code), and the coverage gate |
-| `task ensure_architecture` | `import-linter` contracts: layered dependency direction, context isolation, presentation purity, the `container.py` exception |
-| `task coverage` | Full test run with coverage report; gate is **≥ 97%** |
+| `task check:quality` | ruff (lint/format, line length 100), pyright (types), vulture (dead code), and the coverage gate |
+| `task check:architecture` | `import-linter` contracts: layered dependency direction, context isolation, presentation purity, the `container.py` exception |
+| `task test:coverage` | Full test run with coverage report; gate is **≥ 97%** |
 
 ## Pass criteria
 

@@ -107,7 +107,7 @@ In `pyproject.toml`, extend the contracts so the new context is covered by:
 ## Verify
 
 ```bash
-task ensure_architecture   # contracts pass (incl. the new context)
-task ensure_quality        # lint, types, dead code, coverage ≥ 97%
-task unit_tests
+task check:architecture   # contracts pass (incl. the new context)
+task check:quality        # lint, types, dead code, coverage ≥ 97%
+task test:unit
 ```

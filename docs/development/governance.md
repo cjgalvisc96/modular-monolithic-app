@@ -1,7 +1,7 @@
 # Governance
 
 Code quality and architectural integrity are enforced by tooling, not by review convention alone.
-The pipelines below run via `task ensure_quality` and `task ensure_architecture` and gate every
+The pipelines below run via `task check:quality` and `task check:architecture` and gate every
 change.
 
 ## Tooling
@@ -20,7 +20,7 @@ Dependencies are managed with **uv** and grouped into `prod`, `dev`, `lint`, and
 ## Quality gate
 
 ```bash
-task ensure_quality
+task check:quality
 ```
 
 Runs ruff, pyright, and vulture, and enforces the coverage gate. Code style expectations:
@@ -34,7 +34,7 @@ Runs ruff, pyright, and vulture, and enforces the coverage gate. Code style expe
 ## Architecture gate
 
 ```bash
-task ensure_architecture
+task check:architecture
 ```
 
 Runs the `import-linter` contracts (also exercised by `tests/architecture/`). The contracts encode
@@ -59,5 +59,5 @@ the codebase grows — which is exactly the failure mode a modular monolith is m
 ## CI
 
 CI runs the same gates a developer runs locally. A change must pass
-`task ensure_quality && task ensure_architecture && task coverage` to merge. The Claude harness
+`task check:quality && task check:architecture && task test:coverage` to merge. The Claude harness
 bundles this as the `quality-gate` command (`.claude/commands/quality-gate.md`).

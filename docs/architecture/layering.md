@@ -67,7 +67,7 @@ the real rule. Keeping it a sibling makes the asymmetry explicit.
 
 These rules are not honor-system. `import-linter` contracts (configured in `pyproject.toml`) and
 the tests under `tests/architecture/` verify them programmatically on every run of
-`task ensure_architecture`:
+`task check:architecture`:
 
 - **Layered contract** per context — `domain` cannot import `application` or `infrastructure`;
   `application` cannot import `infrastructure`.

@@ -48,13 +48,13 @@ With `task docker:up` running, a local Postgres is available to point `TEST_DATA
 
 ## Coverage gate
 
-Overall coverage must be **≥ 97%**, enforced in `task ensure_quality` (and reported by
-`task coverage`). Pull requests that drop coverage below the threshold fail the gate.
+Overall coverage must be **≥ 97%**, enforced in `task check:quality` (and reported by
+`task test:coverage`). Pull requests that drop coverage below the threshold fail the gate.
 
 ## Running tests
 
 ```bash
-task unit_tests            # unit tier (fast)
-task coverage              # full run + coverage report (gate ≥ 97%)
-task ensure_architecture   # architecture/import-linter contracts
+task test:unit            # unit tier (fast)
+task test:coverage              # full run + coverage report (gate ≥ 97%)
+task check:architecture   # architecture/import-linter contracts
 ```

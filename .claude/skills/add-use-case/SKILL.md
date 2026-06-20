@@ -74,7 +74,7 @@ ports. If it uses a cross-context port, ensure that port is passed in from the r
 ## Verify
 
 ```bash
-task ensure_quality        # lint, types, dead code, coverage ≥ 97%
-task ensure_architecture   # boundaries still intact
-task unit_tests
+task check:quality        # lint, types, dead code, coverage ≥ 97%
+task check:architecture   # boundaries still intact
+task test:unit
 ```

@@ -46,7 +46,7 @@ BEDROCK_MODEL_ID
 ## Bootstrap the environment
 
 ```bash
-task create_venv
+task env:create
 ```
 
 Provisions the `uv`-managed virtual environment and installs the dependency groups (`prod`, `dev`,
@@ -84,9 +84,9 @@ These are the real targets exposed by `Taskfile.yml`:
 ## Typical inner loop
 
 ```bash
-task ensure_quality        # lint + types + dead-code + coverage gate
-task ensure_architecture   # layer + context boundary contracts
-task unit_tests            # fast feedback
+task check:quality        # lint + types + dead-code + coverage gate
+task check:architecture   # layer + context boundary contracts
+task test:unit            # fast feedback
 ```
 
 For the full quality gate that mirrors CI, see the `quality-gate` command

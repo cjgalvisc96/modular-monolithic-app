@@ -1,6 +1,6 @@
 # Rule: Coding Style
 
-Enforced by `task ensure_quality` (ruff, pyright, vulture). Style is checked, not optional.
+Enforced by `task check:quality` (ruff, pyright, vulture). Style is checked, not optional.
 
 ## Formatting & imports
 

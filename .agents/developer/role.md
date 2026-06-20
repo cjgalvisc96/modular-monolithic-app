@@ -23,7 +23,7 @@ typed, well-tested code that passes the quality and architecture gates without l
 
 ## Outputs
 
-- Implementation diffs that pass `task ensure_quality` and `task ensure_architecture`.
+- Implementation diffs that pass `task check:quality` and `task check:architecture`.
 - Accompanying unit tests; updated DI wiring; updated DTOs/serializers as needed.
 - A short note to the Lead describing what changed and any decisions surfaced for the Architect.
 

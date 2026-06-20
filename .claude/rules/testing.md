@@ -1,11 +1,11 @@
 # Rule: Testing
 
-Enforced via `task unit_tests`, `task coverage`, and `task ensure_quality`. See
+Enforced via `task test:unit`, `task test:coverage`, and `task check:quality`. See
 `docs/development/testing.md` for the full strategy.
 
 ## Coverage gate
 
-- Overall coverage must be **≥ 97%**, enforced in `task ensure_quality`.
+- Overall coverage must be **≥ 97%**, enforced in `task check:quality`.
 - Per-context unit suites target **100%** coverage.
 - A change that drops coverage below the threshold fails the gate. Do not lower the threshold to
   pass.
@@ -15,7 +15,7 @@ Enforced via `task unit_tests`, `task coverage`, and `task ensure_quality`. See
 - **Unit** — the bulk. Domain logic and use cases, with **no DB, AWS, or FastAPI dependency**.
 - **Integration** (~10%) — real repositories against a database; includes the RLS isolation test.
 - **E2E** (~1%) — full API flow: auth → create → read → update → soft-delete.
-- **Architecture** — `import-linter` contracts (run via `task ensure_architecture`).
+- **Architecture** — `import-linter` contracts (run via `task check:architecture`).
 
 Every tier covers happy paths, edge cases, and error scenarios.
 
