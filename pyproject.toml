@@ -34,6 +34,8 @@ test = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",
+    "pytest-xdist>=3.5",      # parallel test execution (-n)
+    "pytest-randomly>=3.15",  # randomized test order each run
     "aiosqlite>=0.20",
     "asgi-lifespan>=2.1",
 ]
@@ -48,6 +50,11 @@ observability = [
     "opentelemetry-instrumentation-redis>=0.46b0",
     "opentelemetry-instrumentation-botocore>=0.46b0",
 ]
+
+[tool.uv]
+# Provision dev + test + lint by default so `uv run <tool>` (and every Taskfile
+# target) works on a freshly synced env — `observability` stays opt-in.
+default-groups = ["dev", "test", "lint"]
 
 [build-system]
 requires = ["hatchling"]
@@ -79,7 +86,11 @@ known-first-party = ["todo_app"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-q"
+# Parallel by default (4 workers via pytest-xdist); --dist loadscope keeps each
+# test module on one worker (module-scoped fixtures + serializes the RLS module
+# against its shared Postgres). Order is randomized each run by pytest-randomly.
+# Override per-run with e.g. `-n0` (serial, for debugging) or `-n auto`.
+addopts = "-q -n 4 --dist loadscope"
 
 [tool.coverage.run]
 branch = true
