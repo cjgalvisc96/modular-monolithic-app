@@ -1,0 +1,42 @@
+todo-app has been deployed.
+
+  Release:    {{ .Release.Name }}
+  Namespace:  {{ .Values.namespace }}
+  Chart:      {{ .Chart.Name }}-{{ .Chart.Version }} (appVersion {{ .Chart.AppVersion }})
+  Image:      {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+
+Workloads + their IRSA-bound ServiceAccounts (one role per workload):
+  - API Deployment   -> SA {{ include "todo-app.serviceAccountName.api" . }}
+      roleArn: {{ .Values.serviceAccounts.api.roleArn | default "(unset)" }}
+  - AI/Bedrock pod   -> SA {{ include "todo-app.serviceAccountName.ai" . }}
+      roleArn: {{ .Values.serviceAccounts.ai.roleArn | default "(unset)" }}
+  - DB-init Job      -> SA {{ include "todo-app.serviceAccountName.dbInit" . }}
+      roleArn: {{ .Values.serviceAccounts.dbInit.roleArn | default "(unset)" }}
+
+Database migrations:
+  Atlas migrations run as a SEPARATE Helm pre-install/pre-upgrade hook Job
+  ({{ include "todo-app.fullname" . }}-db-init), NOT inside the API container.
+  This avoids migration races across API replicas. Inspect with:
+
+    kubectl -n {{ .Values.namespace }} get jobs -l app.kubernetes.io/component=db-init
+    kubectl -n {{ .Values.namespace }} logs job/{{ include "todo-app.fullname" . }}-db-init
+
+Reach the API:
+  1. Port-forward the ClusterIP service:
+
+       kubectl -n {{ .Values.namespace }} port-forward svc/{{ include "todo-app.fullname" . }} 8000:{{ .Values.service.port }}
+
+  2. Health check:
+
+       curl http://127.0.0.1:8000{{ .Values.probes.readiness.path }}
+
+{{- if .Values.autoscaling.enabled }}
+
+Autoscaling is ENABLED ({{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} replicas).
+  Requires the metrics-server to be installed in the cluster.
+
+    kubectl -n {{ .Values.namespace }} get hpa {{ include "todo-app.fullname" . }}
+{{- else }}
+
+Autoscaling is DISABLED; running {{ .Values.replicaCount }} static replica(s).
+{{- end }}

@@ -1,0 +1,20 @@
+[
+  {
+    "id": "aaaa1111-1111-1111-1111-111111111111",
+    "tenant_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "owner_id": "22222222-2222-2222-2222-222222222222",
+    "title": "Write the architecture ADRs",
+    "description": "Document why Cognito over Keycloak and RLS over app-layer tenancy.",
+    "status": "pending",
+    "due_date": "2026-07-01"
+  },
+  {
+    "id": "bbbb2222-2222-2222-2222-222222222222",
+    "tenant_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "owner_id": "33333333-3333-3333-3333-333333333333",
+    "title": "Provision dev EKS cluster",
+    "description": "Terragrunt apply for the dev environment.",
+    "status": "in_progress",
+    "due_date": "2026-06-25"
+  }
+]

@@ -1,0 +1,59 @@
+# Dev cluster overrides — namespace dev-app.
+# Lower replicas/resources, autoscaling off, verbose logging.
+
+namespace: dev-app
+
+namespaceConfig:
+  create: true
+
+replicaCount: 1
+
+image:
+  repository: local/todo-app
+  tag: dev
+  pullPolicy: IfNotPresent
+
+serviceAccounts:
+  api:
+    roleArn: "arn:aws:iam::000000000000:role/todo-app-dev-api"
+  ai:
+    roleArn: "arn:aws:iam::000000000000:role/todo-app-dev-ai"
+  dbInit:
+    roleArn: "arn:aws:iam::000000000000:role/todo-app-dev-db-init"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false
+
+config:
+  OWNER: dev
+  DEBUG: "true"
+  LOG_LEVEL: DEBUG
+  AWS_REGION: us-east-1
+  COGNITO_USER_POOL_ID: us-east-1_devpool
+  COGNITO_APP_CLIENT_ID: devappclientid
+  COGNITO_DOMAIN: todo-app-dev.auth.us-east-1.amazoncognito.com
+  BEDROCK_MODEL_ID: anthropic.claude-3-5-sonnet-20240620-v1:0
+  CACHE_ENABLE: "true"
+  CACHE_NAMESPACES: users,tasks,ai
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: todo
+
+secrets:
+  DB_USER: todo
+  DB_PASSWORD: todo
+  REDIS_PASSWORD: ""
+
+dbInit:
+  enabled: true
+  atlasEnv: dev

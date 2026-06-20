@@ -1,0 +1,40 @@
+# Trivy configuration for the "floci" infra test layer.
+# Scans the Helm chart + rendered K8s manifests for misconfigurations.
+#
+# Run from the repo root:
+#   trivy config --config infra/tests/trivy/trivy-config.yaml infra/k8s
+#
+# Or scan a rendered manifest:
+#   helm template todo-app infra/k8s/helm -f infra/k8s/helm/values-prod.yaml > /tmp/rendered.yaml
+#   trivy config --config infra/tests/trivy/trivy-config.yaml /tmp/rendered.yaml
+
+# Fail the run (non-zero exit) only on actionable findings.
+severity:
+  - HIGH
+  - CRITICAL
+
+# Only run the misconfiguration scanner here.
+scan:
+  scanners:
+    - misconfig
+
+misconfiguration:
+  # Evaluate Helm templates by rendering them first.
+  helm:
+    # Apply both env value files so prod (HPA, hardened) is also scanned.
+    values:
+      - infra/k8s/helm/values.yaml
+      - infra/k8s/helm/values-prod.yaml
+  # Frameworks to evaluate the manifests against.
+  checkTypes:
+    - kubernetes
+  includeNonFailures: false
+
+# Honour the ignore file with documented exceptions.
+ignorefile: infra/tests/trivy/.trivyignore
+
+# Exit non-zero when a HIGH/CRITICAL misconfig is found (CI gate).
+exit-code: 1
+
+# Quiet the banner/progress noise in CI logs.
+quiet: true

@@ -1,0 +1,44 @@
+{{- if .Values.rbac.create }}
+{{- /*
+Per-namespace, least-privilege RBAC.
+The API pod only needs read access to the specific ConfigMap and Secret that
+hold its config. It is namespaced (Role + RoleBinding, not ClusterRole), so it
+cannot reach across the dev-app / prod-app boundary.
+*/ -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "todo-app.fullname" . }}-api
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "todo-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames:
+      - {{ include "todo-app.configMapName" . }}
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames:
+      - {{ include "todo-app.secretName" . }}
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "todo-app.fullname" . }}-api
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "todo-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "todo-app.fullname" . }}-api
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "todo-app.serviceAccountName.api" . }}
+    namespace: {{ .Values.namespace }}
+{{- end }}

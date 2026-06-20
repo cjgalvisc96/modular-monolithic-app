@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: todo-app
+
+scrape_configs:
+  # Application metrics re-exported by the OTel Collector's prometheus exporter.
+  - job_name: otel-collector-app-metrics
+    static_configs:
+      - targets: ["todo-app-otel-collector:8889"]
+        labels:
+          service: todo-app
+
+  # The OTel Collector's own internal telemetry.
+  - job_name: otel-collector-internal
+    static_configs:
+      - targets: ["todo-app-otel-collector:8888"]
+
+  # Prometheus self-monitoring.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

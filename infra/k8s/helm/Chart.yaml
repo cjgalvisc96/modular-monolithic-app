@@ -1,0 +1,28 @@
+apiVersion: v2
+name: todo-app
+description: >-
+  Helm chart for the todo-app DDD modular-monolith service (FastAPI + Postgres
+  + Redis, AWS Cognito auth, Amazon Bedrock for the ai context, PostgreSQL RLS
+  multi-tenancy). Ships the API Deployment, a decoupled Atlas DB-init Job (Helm
+  hook), IRSA-bound ServiceAccounts, per-namespace RBAC and an optional HPA.
+type: application
+
+# Chart version (bump on any chart change).
+version: 0.1.0
+
+# Application version (tracks the todo-app image tag this chart targets).
+appVersion: "1.0.0"
+
+keywords:
+  - todo
+  - fastapi
+  - ddd
+  - modular-monolith
+  - eks
+  - irsa
+
+maintainers:
+  - name: Cristian Galvis
+    email: cjgalvisc@unal.edu.co
+
+home: https://github.com/cjgalvisc96/local-gitops

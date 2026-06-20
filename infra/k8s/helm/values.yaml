@@ -1,0 +1,187 @@
+# Default values for the todo-app chart.
+# These are the common defaults; per-environment overrides live in
+# values-dev.yaml and values-prod.yaml.
+
+# Target namespace. The chart can optionally create it (see `namespace.create`).
+namespace: dev-app
+
+namespaceConfig:
+  # When true, the chart renders templates/namespace.yaml.
+  # GitOps controllers (Argo CD) usually create the namespace themselves, so
+  # this is opt-in.
+  create: true
+
+# Number of API replicas (ignored when autoscaling.enabled=true).
+replicaCount: 1
+
+image:
+  repository: local/todo-app
+  # The build target / variant of the multi-stage Dockerfile to deploy.
+  # `prod` is the lean runtime image; `dev` enables uvicorn --reload.
+  tag: prod
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Override chart name / fullname if desired.
+nameOverride: ""
+fullnameOverride: ""
+
+# ---------------------------------------------------------------------------
+# ServiceAccounts + IRSA (IAM Roles for Service Accounts).
+# Each workload gets its OWN ServiceAccount bound to its OWN scoped IAM role.
+# No shared role: the API pod, the AI/Bedrock pod and the DB-init Job are
+# independently authorized.
+# ---------------------------------------------------------------------------
+serviceAccounts:
+  api:
+    create: true
+    name: ""        # defaults to "<fullname>-api"
+    # IRSA: scoped IAM role for the API pod (Cognito, RDS IAM auth, etc.).
+    roleArn: ""
+    annotations: {}
+  ai:
+    create: true
+    name: ""        # defaults to "<fullname>-ai"
+    # IRSA: scoped IAM role for the AI/Bedrock workload (bedrock:InvokeModel).
+    roleArn: ""
+    annotations: {}
+  dbInit:
+    create: true
+    name: ""        # defaults to "<fullname>-db-init"
+    # IRSA: scoped IAM role for the Atlas DB-init Job (RDS connect/migrate).
+    roleArn: ""
+    annotations: {}
+
+# Per-namespace RBAC (least privilege: the app only reads its own
+# ConfigMap + Secret at runtime).
+rbac:
+  create: true
+
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+# Container port the app listens on (uvicorn).
+containerPort: 8000
+
+# ---------------------------------------------------------------------------
+# Probes (both hit /health)
+# ---------------------------------------------------------------------------
+probes:
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  liveness:
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# ---------------------------------------------------------------------------
+# Resources for the API container
+# ---------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# ---------------------------------------------------------------------------
+# Pod / container hardening
+# ---------------------------------------------------------------------------
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ---------------------------------------------------------------------------
+# Autoscaling (HPA). Disabled by default; prod enables it.
+# ---------------------------------------------------------------------------
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# ---------------------------------------------------------------------------
+# Non-secret application config -> rendered into the ConfigMap.
+# ---------------------------------------------------------------------------
+config:
+  OWNER: local
+  DEBUG: "false"
+  LOG_LEVEL: INFO
+  AWS_REGION: us-east-1
+  COGNITO_USER_POOL_ID: us-east-1_example
+  COGNITO_APP_CLIENT_ID: exampleappclientid
+  COGNITO_DOMAIN: todo-app.auth.us-east-1.amazoncognito.com
+  BEDROCK_MODEL_ID: anthropic.claude-3-5-sonnet-20240620-v1:0
+  CACHE_ENABLE: "true"
+  CACHE_NAMESPACES: users,tasks,ai
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: todo
+
+# ---------------------------------------------------------------------------
+# Secret values -> rendered into the Secret (b64enc'd by the template).
+# In real clusters these are injected via SOPS / External Secrets / sealed
+# secrets; defaults here are local-dev only.
+# ---------------------------------------------------------------------------
+secrets:
+  DB_USER: todo
+  DB_PASSWORD: todo
+  REDIS_PASSWORD: ""
+
+# ---------------------------------------------------------------------------
+# DB-init Job (Atlas migrations) — runs as a Helm pre-install/pre-upgrade hook,
+# decoupled from the API Deployment to avoid migration races across replicas.
+# ---------------------------------------------------------------------------
+dbInit:
+  enabled: true
+  image:
+    repository: arigaio/atlas
+    tag: "0.21.1"
+    pullPolicy: IfNotPresent
+  # Atlas env name defined in migrations/atlas.hcl (dev | prod).
+  atlasEnv: dev
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi

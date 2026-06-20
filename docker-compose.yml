@@ -1,0 +1,79 @@
+# Consistent naming convention across the stack:
+#   service / container: todo-app-<role>   network: todo-app-net   volume: todo-app-<role>-data
+name: todo-app
+
+services:
+  app:
+    build:
+      context: .
+      target: dev
+    image: local/todo-app:dev
+    container_name: todo-app-api
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./migrations:/app/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - todo-app-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: todo-app-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-todo}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-todo}
+      POSTGRES_DB: ${DB_NAME:-todo}
+    ports:
+      - "5432:5432"
+    volumes:
+      - todo-app-postgres-data:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - todo-app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-todo} -d ${DB_NAME:-todo}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: todo-app-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - todo-app-redis-data:/data
+    networks:
+      - todo-app-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+networks:
+  todo-app-net:
+    name: todo-app-net
+    driver: bridge
+
+volumes:
+  todo-app-postgres-data:
+    name: todo-app-postgres-data
+  todo-app-redis-data:
+    name: todo-app-redis-data

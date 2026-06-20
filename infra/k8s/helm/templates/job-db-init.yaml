@@ -1,0 +1,92 @@
+{{- if .Values.dbInit.enabled }}
+{{- /*
+DB-init Job — runs Atlas migrations BEFORE the API rolls out.
+
+It is a SEPARATE workload from the API Deployment (decoupled): the API
+container never runs migrations on startup, which avoids migration races
+when multiple replicas boot at once.
+
+Delivered as a Helm hook:
+  - pre-install,pre-upgrade : runs before the chart's normal resources apply
+  - hook-weight "0"         : after the hook-managed ServiceAccount (weight -10)
+  - hook-delete-policy      : clean up the previous Job, and the succeeded Job
+*/ -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "todo-app.fullname" . }}-db-init
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "todo-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-init
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.dbInit.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.dbInit.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "todo-app.labels" . | nindent 8 }}
+        app.kubernetes.io/component: db-init
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "todo-app.serviceAccountName.dbInit" . }}
+      automountServiceAccountToken: true
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: atlas-migrate
+          image: "{{ .Values.dbInit.image.repository }}:{{ .Values.dbInit.image.tag }}"
+          imagePullPolicy: {{ .Values.dbInit.image.pullPolicy }}
+          workingDir: /migrations
+          command:
+            - atlas
+          args:
+            - migrate
+            - apply
+            - --env
+            - {{ .Values.dbInit.atlasEnv | quote }}
+            - --config
+            - file:///migrations/atlas.hcl
+          env:
+            # Build the Atlas DB URL from the same ConfigMap/Secret the API uses.
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "todo-app.configMapName" . }}
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "todo-app.configMapName" . }}
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "todo-app.configMapName" . }}
+                  key: DB_NAME
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "todo-app.secretName" . }}
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "todo-app.secretName" . }}
+                  key: DB_PASSWORD
+            - name: ATLAS_DB_URL
+              value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable"
+          resources:
+            {{- toYaml .Values.dbInit.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+{{- end }}

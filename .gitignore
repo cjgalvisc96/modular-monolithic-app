@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+.mypy_cache/
+.pyright/
+
+# Env / secrets
+.env
+.secrets.yaml
+*.local.tfvars
+
+# uv
+# (uv.lock IS committed)
+
+# IDE
+.idea/
+*.swp
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terragrunt-cache/
+
+# OS
+.DS_Store

@@ -1,0 +1,123 @@
+version: "3"
+
+# Central command runner for the TODO modular monolith.
+# Run `task help` (or just `task`) to list available commands.
+
+vars:
+  PY: "uv run"
+  SRC: "src/todo_app"
+  COMPOSE: "docker compose"
+  PROJECT: "todo-app"
+
+env:
+  PYTHONPATH: "src"
+
+silent: true
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task: help
+
+  help:
+    desc: List available tasks
+    cmds:
+      - task --list-all
+
+  check-deps:
+    desc: Guard — verify required tools are installed before running commands
+    internal: true
+    cmds:
+      - |
+        missing=""
+        for tool in uv docker; do
+          command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+        done
+        if [ -n "$missing" ]; then
+          echo "Missing required tools:$missing" >&2
+          exit 1
+        fi
+
+  create_venv:
+    desc: Bootstrap the virtualenv and sync all dependency groups
+    deps: [check-deps]
+    cmds:
+      - bash scripts/create_venv.sh
+
+  linter:
+    desc: Run ruff (lint + import sort) and format check
+    cmds:
+      - "{{.PY}} ruff check {{.SRC}} tests"
+      - "{{.PY}} ruff format --check {{.SRC}} tests"
+
+  format:
+    desc: Auto-fix lint issues and format code
+    cmds:
+      - "{{.PY}} ruff check --fix {{.SRC}} tests"
+      - "{{.PY}} ruff format {{.SRC}} tests"
+
+  ensure_quality:
+    desc: Full quality gate — lint, types, dead code, coverage threshold
+    cmds:
+      - task: linter
+      - "{{.PY}} pyright"
+      - "{{.PY}} vulture"
+      - task: coverage
+
+  ensure_architecture:
+    desc: Enforce DDD layer + bounded-context boundaries via import-linter
+    cmds:
+      - "{{.PY}} lint-imports"
+
+  unit_tests:
+    desc: Run the unit test suite
+    cmds:
+      - "{{.PY}} pytest tests/unit"
+
+  integration_tests:
+    desc: Run the integration test suite (DB-level, RLS isolation)
+    cmds:
+      - "{{.PY}} pytest tests/integration"
+
+  test:
+    desc: Run the entire test suite
+    cmds:
+      - "{{.PY}} pytest"
+
+  coverage:
+    desc: Run unit + integration + e2e tests with coverage (>=97% enforced)
+    cmds:
+      - "{{.PY}} pytest tests/unit tests/integration tests/e2e --cov --cov-report=term-missing"
+
+  remove_cache:
+    desc: Remove Python / tooling caches
+    cmds:
+      - find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+      - rm -rf .pytest_cache .ruff_cache .coverage htmlcov coverage.xml 2>/dev/null || true
+
+  docker:up:
+    desc: Build and start app + Postgres + Redis (waits for healthy)
+    deps: [check-deps]
+    cmds:
+      - "{{.COMPOSE}} up -d --build --wait"
+
+  docker:down:
+    desc: Stop and remove containers
+    cmds:
+      - "{{.COMPOSE}} down"
+
+  docker:prune:
+    desc: Stop containers and remove volumes + orphans
+    cmds:
+      - "{{.COMPOSE}} down -v --remove-orphans"
+
+  docker:shell:
+    desc: Open a shell in the running app container
+    cmds:
+      - "{{.COMPOSE}} exec app /bin/bash"
+
+  docker:logs:
+    desc: Tail logs from all services
+    cmds:
+      - "{{.COMPOSE}} logs -f"

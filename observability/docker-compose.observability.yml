@@ -1,0 +1,122 @@
+# Local observability stack for todo-app.
+#
+#   app (OTel SDK) --OTLP/gRPC:4317--> otel-collector
+#       traces  --> tempo        (queried by Grafana)
+#       metrics --> prometheus   (scraped from collector :8889)
+#   grafana visualises both.
+#
+# Run alongside the app stack and join the same external network so the app
+# container can reach todo-app-otel-collector:4317:
+#
+#   docker compose -f docker-compose.yml \
+#     -f observability/docker-compose.observability.yml up -d
+#
+# Naming convention (matches docker-compose.yml):
+#   container: todo-app-<role>   network: todo-app-net   volume: todo-app-<role>-data
+name: todo-app
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: todo-app-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus exporter
+      - "13133:13133" # health_check
+    networks:
+      - todo-app-net
+    depends_on:
+      tempo:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "/healthcheck-extension", "http://localhost:13133"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  tempo:
+    image: grafana/tempo:2.4.1
+    container_name: todo-app-tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - todo-app-tempo-data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo query API
+    networks:
+      - todo-app-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3200/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: todo-app-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - todo-app-prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - todo-app-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: todo-app-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - todo-app-grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - todo-app-net
+    depends_on:
+      prometheus:
+        condition: service_started
+      tempo:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+networks:
+  todo-app-net:
+    name: todo-app-net
+    external: true
+
+volumes:
+  todo-app-tempo-data:
+    name: todo-app-tempo-data
+  todo-app-prometheus-data:
+    name: todo-app-prometheus-data
+  todo-app-grafana-data:
+    name: todo-app-grafana-data

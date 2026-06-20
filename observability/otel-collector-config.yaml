@@ -1,0 +1,77 @@
+# OpenTelemetry Collector configuration (collector-contrib v0.9x schema).
+#
+# Pipeline:
+#   app (OTel SDK, OTLP/gRPC) --> [receivers] --> [processors] --> [exporters]
+#     traces  -> otlp/tempo (Tempo)
+#     metrics -> prometheus  (scraped by Prometheus)
+#
+# The app's src/todo_app/core/telemetry.py pushes spans over OTLP/gRPC to the
+# endpoint configured by OTEL_EXPORTER_OTLP_ENDPOINT (default this collector
+# on :4317).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Guard the collector against OOM by limiting how much memory it buffers.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  # Batch telemetry to reduce the number of outgoing requests.
+  batch:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 5s
+  # Stamp a consistent collector identity onto every record.
+  resource:
+    attributes:
+      - key: collector.name
+        value: todo-app-otel-collector
+        action: upsert
+      - key: deployment.environment
+        value: local
+        action: upsert
+
+exporters:
+  # Traces -> Tempo over OTLP/gRPC.
+  otlp/tempo:
+    endpoint: todo-app-tempo:4317
+    tls:
+      insecure: true
+  # Metrics -> Prometheus pull endpoint scraped at :8889.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    send_timestamps: true
+    metric_expiration: 5m
+    resource_to_telemetry_conversion:
+      enabled: true
+  # Human-readable console output for local debugging.
+  debug:
+    verbosity: normal
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/tempo, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus, debug]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888

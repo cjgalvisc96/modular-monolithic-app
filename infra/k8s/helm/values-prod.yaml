@@ -1,0 +1,66 @@
+# Prod cluster overrides — namespace prod-app.
+# HPA enabled, higher resources, lean prod image, INFO logging.
+
+namespace: prod-app
+
+namespaceConfig:
+  # In prod the namespace is usually managed by the platform / Argo CD.
+  create: false
+
+# Baseline replicas; HPA owns the live count when enabled.
+replicaCount: 3
+
+image:
+  repository: local/todo-app
+  tag: prod
+  pullPolicy: IfNotPresent
+
+serviceAccounts:
+  api:
+    roleArn: "arn:aws:iam::000000000000:role/todo-app-prod-api"
+  ai:
+    roleArn: "arn:aws:iam::000000000000:role/todo-app-prod-ai"
+  dbInit:
+    roleArn: "arn:aws:iam::000000000000:role/todo-app-prod-db-init"
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+config:
+  OWNER: prod
+  DEBUG: "false"
+  LOG_LEVEL: INFO
+  AWS_REGION: us-east-1
+  COGNITO_USER_POOL_ID: us-east-1_prodpool
+  COGNITO_APP_CLIENT_ID: prodappclientid
+  COGNITO_DOMAIN: todo-app.auth.us-east-1.amazoncognito.com
+  BEDROCK_MODEL_ID: anthropic.claude-3-5-sonnet-20240620-v1:0
+  CACHE_ENABLE: "true"
+  CACHE_NAMESPACES: users,tasks,ai
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: todo
+
+secrets:
+  # Placeholder values; replace via External Secrets / SOPS in prod.
+  DB_USER: todo
+  DB_PASSWORD: change-me-in-prod
+  REDIS_PASSWORD: ""
+
+dbInit:
+  enabled: true
+  atlasEnv: prod

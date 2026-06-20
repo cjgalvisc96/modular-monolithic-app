@@ -1,0 +1,9 @@
+{{- if .Values.namespaceConfig.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    {{- include "todo-app.labels" . | nindent 4 }}
+    kubernetes.io/metadata.name: {{ .Values.namespace }}
+{{- end }}

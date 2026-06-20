@@ -1,0 +1,27 @@
+# Trivy ignore file for the todo-app Helm chart.
+# Each entry MUST have a justification. Re-review on every chart bump.
+
+# AVD-KSV-0001 / KSV001: Process can elevate its own privileges.
+#   Not ignored — the chart sets allowPrivilegeEscalation: false. Listed here
+#   only as documentation that it is intentionally enforced, not suppressed.
+
+# KSV011: CPU not limited.
+#   Not ignored — resources.limits.cpu is set in values.yaml / values-prod.yaml.
+
+# KSV014: Root file system is not read-only.
+#   Not ignored — securityContext.readOnlyRootFilesystem: true is set, with a
+#   writable emptyDir mounted at /tmp.
+
+# --- Genuinely suppressed below ---
+
+# KSV116: Runs with a default/empty seccomp profile on the DB-init Job.
+#   The DB-init Job is a short-lived Helm hook (Atlas migrate apply) using the
+#   upstream arigaio/atlas image; the pod-level seccompProfile RuntimeDefault
+#   from podSecurityContext applies, but Trivy evaluates the hook Job in
+#   isolation and can flag it. Accepted: ephemeral, no inbound traffic.
+KSV116
+
+# KSV104: Seccomp profiles disabled (image-level default on third-party image).
+#   Applies to the arigaio/atlas migration image which we do not build. The
+#   workload is namespaced, runs once per deploy, and drops ALL capabilities.
+KSV104

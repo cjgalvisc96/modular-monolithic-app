@@ -1,0 +1,49 @@
+# Argo CD Application — DEV.
+# Renders the todo-app Helm chart into the `dev-app` namespace on the dev
+# cluster, using infra/k8s/helm/values-dev.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: todo-app-dev
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: todo-app
+    env: dev
+  # Keep the controller from pruning the Application while it finalizes.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: todo-app
+  source:
+    repoURL: https://github.com/cjgalvisc96/local-gitops.git
+    targetRevision: main
+    # Path to the chart inside the application repo (vendored or submoduled
+    # from this repository's infra/k8s/helm).
+    path: infra/k8s/helm
+    helm:
+      releaseName: todo-app
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml
+  destination:
+    # Dev cluster. For a single local cluster (kind/minikube) this is the
+    # in-cluster endpoint; for a true multi-cluster sim register the dev
+    # cluster and reference it by name/server.
+    name: dev-cluster
+    namespace: dev-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      # Helm hooks (the DB-init Job) are respected by Argo CD's hook engine.
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
