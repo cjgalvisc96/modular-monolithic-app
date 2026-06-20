@@ -3,7 +3,7 @@
 Per-namespace, least-privilege RBAC.
 The API pod only needs read access to the specific ConfigMap and Secret that
 hold its config. It is namespaced (Role + RoleBinding, not ClusterRole), so it
-cannot reach across the dev-app / prod-app boundary.
+cannot reach across the namespace boundary.
 */ -}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

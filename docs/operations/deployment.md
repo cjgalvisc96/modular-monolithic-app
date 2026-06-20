@@ -52,8 +52,8 @@ No workload uses a shared or account-wide role. See
 
 | Cluster | Namespace | Purpose |
 |---------|-----------|---------|
-| `dev` | `dev-app` | Development environment |
-| `prod` | `prod-app` | Production environment |
+| `dev` | `todo-app` (dev cluster) | Development environment |
+| `prod` | `todo-app` (prod cluster) | Production environment |
 
 Each cluster has independent namespaces and per-namespace Kubernetes RBAC. Environment differences
 are carried in `values-dev.yaml` vs `values-prod.yaml`.

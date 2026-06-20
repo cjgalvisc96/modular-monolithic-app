@@ -1,60 +1,54 @@
 # Default values for the todo-app chart.
-# These are the common defaults; per-environment overrides live in
-# values-dev.yaml and values-prod.yaml.
+# Common defaults; per-environment overrides live in values-dev.yaml /
+# values-prod.yaml. The defaults target the local-gitops platform (kind + Argo
+# CD + floci): one app-named namespace per cluster, ESO-backed secrets, an
+# nginx Ingress, and Prometheus scrape annotations.
 
-# Target namespace. The chart can optionally create it (see `namespace.create`).
-namespace: dev-app
+# Target namespace. Clusters are per-environment, so the namespace is the app
+# name (not env-suffixed) — matching the platform's app1/app2/observability layout.
+namespace: todo-app
 
 namespaceConfig:
-  # When true, the chart renders templates/namespace.yaml.
-  # GitOps controllers (Argo CD) usually create the namespace themselves, so
-  # this is opt-in.
-  create: true
+  # GitOps controllers (Argo CD) create the namespace via CreateNamespace=true,
+  # so the chart does NOT render its own Namespace by default.
+  create: false
 
 # Number of API replicas (ignored when autoscaling.enabled=true).
 replicaCount: 1
 
 image:
   repository: local/todo-app
-  # The build target / variant of the multi-stage Dockerfile to deploy.
   # `prod` is the lean runtime image; `dev` enables uvicorn --reload.
   tag: prod
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 
-# Override chart name / fullname if desired.
 nameOverride: ""
 fullnameOverride: ""
 
 # ---------------------------------------------------------------------------
-# ServiceAccounts + IRSA (IAM Roles for Service Accounts).
-# Each workload gets its OWN ServiceAccount bound to its OWN scoped IAM role.
-# No shared role: the API pod, the AI/Bedrock pod and the DB-init Job are
-# independently authorized.
+# ServiceAccounts + IRSA. Each workload gets its OWN SA bound to its OWN scoped
+# IAM role. On the local kind/floci platform the role-arn annotations are no-ops
+# (no AWS OIDC provider); on real EKS they bind the pod to its least-priv role.
 # ---------------------------------------------------------------------------
 serviceAccounts:
   api:
     create: true
     name: ""        # defaults to "<fullname>-api"
-    # IRSA: scoped IAM role for the API pod (Cognito, RDS IAM auth, etc.).
     roleArn: ""
     annotations: {}
   ai:
     create: true
     name: ""        # defaults to "<fullname>-ai"
-    # IRSA: scoped IAM role for the AI/Bedrock workload (bedrock:InvokeModel).
     roleArn: ""
     annotations: {}
   dbInit:
     create: true
     name: ""        # defaults to "<fullname>-db-init"
-    # IRSA: scoped IAM role for the Atlas DB-init Job (RDS connect/migrate).
     roleArn: ""
     annotations: {}
 
-# Per-namespace RBAC (least privilege: the app only reads its own
-# ConfigMap + Secret at runtime).
 rbac:
   create: true
 
@@ -66,8 +60,29 @@ service:
   port: 80
   targetPort: 8000
 
-# Container port the app listens on (uvicorn).
 containerPort: 8000
+
+# ---------------------------------------------------------------------------
+# Ingress (nginx). Host follows the platform convention <app>.<env>.local.
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  host: todo-app.dev.local
+  path: /
+  pathType: Prefix
+
+# ---------------------------------------------------------------------------
+# Prometheus scrape. The platform's OTel Collector scrapes pods carrying these
+# annotations (it has no OTLP receiver), so the app exposes /metrics and is
+# annotated for scraping. Grafana then reads them via Prometheus.
+# ---------------------------------------------------------------------------
+metrics:
+  enabled: true
+  port: 8000
+  path: /metrics
 
 # ---------------------------------------------------------------------------
 # Probes (both hit /health)
@@ -86,9 +101,6 @@ probes:
     timeoutSeconds: 3
     failureThreshold: 3
 
-# ---------------------------------------------------------------------------
-# Resources for the API container
-# ---------------------------------------------------------------------------
 resources:
   requests:
     cpu: 100m
@@ -97,9 +109,6 @@ resources:
     cpu: 500m
     memory: 512Mi
 
-# ---------------------------------------------------------------------------
-# Pod / container hardening
-# ---------------------------------------------------------------------------
 podAnnotations: {}
 podLabels: {}
 
@@ -124,9 +133,6 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# ---------------------------------------------------------------------------
-# Autoscaling (HPA). Disabled by default; prod enables it.
-# ---------------------------------------------------------------------------
 autoscaling:
   enabled: false
   minReplicas: 1
@@ -135,13 +141,17 @@ autoscaling:
   targetMemoryUtilizationPercentage: 80
 
 # ---------------------------------------------------------------------------
-# Non-secret application config -> rendered into the ConfigMap.
+# Non-secret application config -> ConfigMap.
+# AWS_ENDPOINT_URL points the AWS SDK (boto3/Bedrock) at floci locally; it is
+# honored natively by botocore. Empty on real AWS.
 # ---------------------------------------------------------------------------
 config:
   OWNER: local
   DEBUG: "false"
   LOG_LEVEL: INFO
   AWS_REGION: us-east-1
+  AWS_ENDPOINT_URL: ""          # local-gitops: http://172.18.0.1:4566 (floci)
+  ECR_REGISTRY: ""              # local-gitops: 000000000000.dkr.ecr.us-east-1.amazonaws.com
   COGNITO_USER_POOL_ID: us-east-1_example
   COGNITO_APP_CLIENT_ID: exampleappclientid
   COGNITO_DOMAIN: todo-app.auth.us-east-1.amazoncognito.com
@@ -155,18 +165,37 @@ config:
   DB_NAME: todo
 
 # ---------------------------------------------------------------------------
-# Secret values -> rendered into the Secret (b64enc'd by the template).
-# In real clusters these are injected via SOPS / External Secrets / sealed
-# secrets; defaults here are local-dev only.
+# Secrets. Two delivery modes:
+#  - externalSecrets.enabled=true  -> an ExternalSecret (ESO) materializes the
+#    Secret from the platform's `aws-ssm` ClusterSecretStore (SSM Param Store
+#    via floci), under <parameterPrefix>/<KEY>. This is the platform default.
+#  - externalSecrets.enabled=false -> the chart renders a plain Secret from the
+#    `secrets` map below (plain-helm / docker-compose local use only).
+# Either way the Deployment envFroms the same Secret name.
 # ---------------------------------------------------------------------------
+externalSecrets:
+  enabled: true
+  # The platform's ClusterSecretStore (gitops-apps/platform/base/secretstore.yaml).
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  refreshInterval: 1m
+  # SSM Parameter Store prefix: /gitops/<env>/<app>. Keys appended per secret.
+  parameterPrefix: /gitops/dev/todo-app
+  # Which keys to pull (remoteRef = <parameterPrefix>/<key>).
+  keys:
+    - DB_USER
+    - DB_PASSWORD
+    - REDIS_PASSWORD
+
 secrets:
   DB_USER: todo
   DB_PASSWORD: todo
   REDIS_PASSWORD: ""
 
 # ---------------------------------------------------------------------------
-# DB-init Job (Atlas migrations) — runs as a Helm pre-install/pre-upgrade hook,
-# decoupled from the API Deployment to avoid migration races across replicas.
+# DB-init Job (Atlas migrations) — Helm pre-install/pre-upgrade hook, decoupled
+# from the API Deployment to avoid migration races across replicas.
 # ---------------------------------------------------------------------------
 dbInit:
   enabled: true
@@ -174,7 +203,6 @@ dbInit:
     repository: arigaio/atlas
     tag: "0.21.1"
     pullPolicy: IfNotPresent
-  # Atlas env name defined in migrations/atlas.hcl (dev | prod).
   atlasEnv: dev
   backoffLimit: 3
   activeDeadlineSeconds: 600

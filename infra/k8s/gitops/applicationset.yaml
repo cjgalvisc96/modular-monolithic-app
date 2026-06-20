@@ -48,8 +48,8 @@ spec:
             - name: namespaceConfig.create
               value: "false"
       destination:
-        name: "{{.name}}"          # registered cluster: dev / prod
-        namespace: "{{.name}}-app" # dev-app / prod-app
+        name: "{{.name}}"   # registered cluster: dev / prod
+        namespace: todo-app # app-named namespace (clusters are per-env)
       syncPolicy:
         automated:
           prune: true

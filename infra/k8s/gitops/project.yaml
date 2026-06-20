@@ -22,9 +22,9 @@ spec:
     - https://github.com/cjgalvisc96/modular-monolithic-app.git
   destinations:
     - name: dev
-      namespace: dev-app
+      namespace: todo-app
     - name: prod
-      namespace: prod-app
+      namespace: todo-app
   clusterResourceWhitelist:
     - group: "*"
       kind: "*"

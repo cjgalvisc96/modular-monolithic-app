@@ -88,6 +88,21 @@ class ApiBuilder:
         app.docs_url = "/docs"
         app.redoc_url = "/redoc"
 
+    def _mount_metrics(self, app: FastAPI) -> None:
+        """Expose Prometheus metrics at /metrics for scrape-based platforms.
+
+        The local-gitops OTel Collector scrapes pods by ``prometheus.io/*``
+        annotation (no OTLP receiver), so the app publishes a scrape endpoint.
+        """
+        from todo_app.presentation.api.metrics import (
+            METRICS_PATH,
+            PrometheusMiddleware,
+            metrics_endpoint,
+        )
+
+        app.add_middleware(PrometheusMiddleware)
+        app.add_route(METRICS_PATH, metrics_endpoint, include_in_schema=False)
+
     def _create_lifespan(self):
         container = self._container
         settings = self._settings
@@ -121,6 +136,7 @@ class ApiBuilder:
         self._register_routes(app)
         self._register_routers(app)
         self._mount_documentation(app)
+        self._mount_metrics(app)
         register_exception_handlers(app)
         self._app = app
         return app

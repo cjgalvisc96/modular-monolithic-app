@@ -100,3 +100,11 @@ async def test_invalid_bearer_token_401(api_client):
 async def test_root_endpoint(api_client):
     r = await api_client.get("/")
     assert r.status_code == 200 and "docs" in r.json()
+
+
+async def test_metrics_endpoint_exposes_prometheus(api_client):
+    # Generate some traffic, then scrape /metrics (Prometheus exposition format).
+    await api_client.get("/health")
+    r = await api_client.get("/metrics")
+    assert r.status_code == 200
+    assert "# HELP" in r.text

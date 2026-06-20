@@ -21,7 +21,7 @@ data "aws_caller_identity" "current" {}
 
 locals {
   name          = "${var.project}-${var.environment}"
-  k8s_namespace = "prod-app"
+  k8s_namespace = "todo-app"
 
   tags = {
     Owner       = var.owner

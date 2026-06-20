@@ -1,10 +1,11 @@
-# Dev cluster overrides — namespace dev-app.
-# Lower replicas/resources, autoscaling off, verbose logging.
+# Dev cluster overrides (local-gitops dev cluster).
+# Namespace todo-app, lower resources, autoscaling off, verbose logging,
+# DEBUG=true so the StubLlmClient + dev-auth header work without real AWS.
 
-namespace: dev-app
+namespace: todo-app
 
 namespaceConfig:
-  create: true
+  create: false   # Argo CD creates the namespace (CreateNamespace=true)
 
 replicaCount: 1
 
@@ -20,6 +21,14 @@ serviceAccounts:
     roleArn: "arn:aws:iam::000000000000:role/todo-app-dev-ai"
   dbInit:
     roleArn: "arn:aws:iam::000000000000:role/todo-app-dev-db-init"
+
+ingress:
+  enabled: true
+  className: nginx
+  host: todo-app.dev.local
+
+metrics:
+  enabled: true
 
 resources:
   requests:
@@ -37,6 +46,8 @@ config:
   DEBUG: "true"
   LOG_LEVEL: DEBUG
   AWS_REGION: us-east-1
+  AWS_ENDPOINT_URL: "http://172.18.0.1:4566"   # floci (local AWS), via kind bridge
+  ECR_REGISTRY: "000000000000.dkr.ecr.us-east-1.amazonaws.com"
   COGNITO_USER_POOL_ID: us-east-1_devpool
   COGNITO_APP_CLIENT_ID: devappclientid
   COGNITO_DOMAIN: todo-app-dev.auth.us-east-1.amazoncognito.com
@@ -49,10 +60,11 @@ config:
   DB_PORT: "5432"
   DB_NAME: todo
 
-secrets:
-  DB_USER: todo
-  DB_PASSWORD: todo
-  REDIS_PASSWORD: ""
+# Secrets come from the platform's aws-ssm ClusterSecretStore (floci SSM),
+# under /gitops/dev/todo-app/*.
+externalSecrets:
+  enabled: true
+  parameterPrefix: /gitops/dev/todo-app
 
 dbInit:
   enabled: true

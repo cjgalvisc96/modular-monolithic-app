@@ -42,7 +42,7 @@ provider generation — see `infra/terragrunt/README.md`.
 IRSA depends on the EKS OIDC provider (created in the `eks` module). Every role's
 trust policy is an `sts:AssumeRoleWithWebIdentity` scoped to **one** Kubernetes
 service account via `<oidc>:sub = system:serviceaccount:<namespace>:<sa>` and
-`<oidc>:aud = sts.amazonaws.com`. Namespaces are `dev-app` / `prod-app`.
+`<oidc>:aud = sts.amazonaws.com`. Namespace is `todo-app` (clusters are per-environment).
 
 | Role (file)               | Service account     | Permissions (and nothing else)                                              |
 |---------------------------|---------------------|------------------------------------------------------------------------------|

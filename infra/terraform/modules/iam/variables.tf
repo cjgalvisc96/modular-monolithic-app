@@ -18,7 +18,7 @@ variable "oidc_provider_url" {
 }
 
 variable "namespace" {
-  description = "Kubernetes namespace the workloads run in (e.g. dev-app / prod-app)."
+  description = "Kubernetes namespace the workloads run in (app-named, e.g. todo-app)."
   type        = string
 }
 

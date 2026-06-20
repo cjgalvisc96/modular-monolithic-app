@@ -1,11 +1,10 @@
-# Prod cluster overrides — namespace prod-app.
-# HPA enabled, higher resources, lean prod image, INFO logging.
+# Prod cluster overrides (local-gitops prod cluster).
+# Namespace todo-app, HPA enabled, higher resources, lean prod image, INFO logs.
 
-namespace: prod-app
+namespace: todo-app
 
 namespaceConfig:
-  # In prod the namespace is usually managed by the platform / Argo CD.
-  create: false
+  create: false   # Argo CD creates the namespace (CreateNamespace=true)
 
 # Baseline replicas; HPA owns the live count when enabled.
 replicaCount: 3
@@ -22,6 +21,14 @@ serviceAccounts:
     roleArn: "arn:aws:iam::000000000000:role/todo-app-prod-ai"
   dbInit:
     roleArn: "arn:aws:iam::000000000000:role/todo-app-prod-db-init"
+
+ingress:
+  enabled: true
+  className: nginx
+  host: todo-app.prod.local
+
+metrics:
+  enabled: true
 
 resources:
   requests:
@@ -43,6 +50,8 @@ config:
   DEBUG: "false"
   LOG_LEVEL: INFO
   AWS_REGION: us-east-1
+  AWS_ENDPOINT_URL: "http://172.18.0.1:4566"   # floci (local AWS), via kind bridge
+  ECR_REGISTRY: "000000000000.dkr.ecr.us-east-1.amazonaws.com"
   COGNITO_USER_POOL_ID: us-east-1_prodpool
   COGNITO_APP_CLIENT_ID: prodappclientid
   COGNITO_DOMAIN: todo-app.auth.us-east-1.amazoncognito.com
@@ -55,11 +64,11 @@ config:
   DB_PORT: "5432"
   DB_NAME: todo
 
-secrets:
-  # Placeholder values; replace via External Secrets / SOPS in prod.
-  DB_USER: todo
-  DB_PASSWORD: change-me-in-prod
-  REDIS_PASSWORD: ""
+# Secrets come from the platform's aws-ssm ClusterSecretStore (floci SSM),
+# under /gitops/prod/todo-app/*.
+externalSecrets:
+  enabled: true
+  parameterPrefix: /gitops/prod/todo-app
 
 dbInit:
   enabled: true
