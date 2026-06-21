@@ -1,12 +1,5 @@
-# OTel packages live in the optional `observability` dependency group, so they
-# may be absent in a base install — guarded by try/except at runtime.
 # pyright: reportMissingImports=false
-"""OpenTelemetry wiring (no-op unless OTEL_ENABLE is set).
-
-Instruments FastAPI, SQLAlchemy, Redis, and outbound AWS (botocore) calls so a
-request is traceable API → use case → repository → DB. Imports are lazy so the
-OTel SDK is an optional dependency group (`--group observability`).
-"""
+"""OpenTelemetry wiring (no-op unless OTEL_ENABLE is set)."""
 
 from __future__ import annotations
 

@@ -1,10 +1,4 @@
-"""Unit of Work — one transaction per operation, tenant-bound for RLS.
-
-Used by the presentation edge (API dependency / CLI) to wrap a use case call:
-opens a session + transaction, issues ``SET LOCAL app.tenant_id`` from the bound
-RequestContext, publishes the current session into the scoped-session contextvar,
-and commits (or rolls back) on exit.
-"""
+"""Unit of Work — one transaction per operation, tenant-bound for RLS."""
 
 from __future__ import annotations
 

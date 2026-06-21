@@ -23,11 +23,7 @@ async def generate_suggestion(
     container=Depends(get_container),
     uow=Depends(get_uow),
 ):
-    """Generate an AI task suggestion.
-
-    Inline by default; pass ``background=true`` to dispatch it as a fire-and-
-    forget background task (returns 202 with no body).
-    """
+    """Generate an AI task suggestion; pass ``background=true`` to dispatch it off-request."""
     if payload.background:
         background_tasks.add_task(
             background.generate_suggestion_in_background,

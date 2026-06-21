@@ -1,10 +1,4 @@
-"""Request-scoped identity/tenant context.
-
-Populated by the API tenant-binding middleware (or the CLI) from the verified
-JWT, read by the DB tenant_context to issue `SET LOCAL app.tenant_id`. Kept in a
-``contextvar`` so it is correct under async concurrency without threading it
-through every call signature.
-"""
+"""Request-scoped identity/tenant context (contextvar, async-safe)."""
 
 from __future__ import annotations
 

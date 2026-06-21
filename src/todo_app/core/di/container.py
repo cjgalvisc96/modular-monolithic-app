@@ -1,12 +1,4 @@
-"""ApplicationContainer — the single root composition point.
-
-Composes each context's container as a sub-container and wires every
-cross-context dependency *explicitly*, so coupling between contexts is visible
-and reviewable rather than implicit in one flat container:
-
-    tasks → users   (read-only user lookup)
-    ai    → tasks   (read-only task lookup)
-"""
+"""ApplicationContainer — the single root composition point."""
 
 from __future__ import annotations
 
@@ -26,8 +18,6 @@ class ApplicationContainer(containers.DeclarativeContainer):
 
     users = providers.Container(UsersContainer, config=config, shared=shared)
 
-    # tasks → users: adapter built from the users repository provider (delegated
-    # so it resolves a fresh, session-scoped repo per call).
     user_lookup = providers.Factory(
         UsersUserLookupAdapter,
         user_repository_factory=users.user_repository.provider,
@@ -37,7 +27,6 @@ class ApplicationContainer(containers.DeclarativeContainer):
         TasksContainer, config=config, shared=shared, user_lookup=user_lookup
     )
 
-    # ai → tasks: adapter built from the tasks repository provider.
     task_read_port = providers.Factory(
         TasksTaskReadAdapter,
         task_repository_factory=tasks.task_repository.provider,
@@ -49,7 +38,6 @@ class ApplicationContainer(containers.DeclarativeContainer):
 
 
 def build_container(settings=None) -> ApplicationContainer:
-    """Instantiate and populate the root container from Settings."""
     from todo_app.core.config import get_settings
 
     settings = settings or get_settings()

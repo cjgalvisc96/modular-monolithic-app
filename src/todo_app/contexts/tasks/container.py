@@ -1,6 +1,4 @@
-"""TasksContainer — wires the tasks context. Receives a read-only user lookup
-port (``user_lookup``) injected by the root ApplicationContainer; tasks never
-imports users internals."""
+"""Wires the tasks context; cross-layer imports are confined here."""
 
 from __future__ import annotations
 
@@ -20,12 +18,10 @@ class TasksContainer(containers.DeclarativeContainer):
     config = providers.Configuration()
     shared = providers.DependenciesContainer()
 
-    # Cross-context dependency satisfied at the root (users → tasks).
     user_lookup = providers.Dependency()
 
     task_repository = providers.Factory(SqlAlchemyTaskRepository)
 
-    # --- commands ---
     create_task_command = providers.Factory(
         CreateTaskCommand,
         repository=task_repository,
@@ -39,6 +35,5 @@ class TasksContainer(containers.DeclarativeContainer):
     )
     update_task_command = providers.Factory(UpdateTaskCommand, repository=task_repository)
 
-    # --- queries ---
     get_task_query = providers.Factory(GetTaskQuery, repository=task_repository)
     list_tasks_query = providers.Factory(ListTasksQuery, repository=task_repository)

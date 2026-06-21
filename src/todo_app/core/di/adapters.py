@@ -1,11 +1,4 @@
-"""Cross-context adapters.
-
-These satisfy one context's consumer-defined port using another context's read
-side. They live at the composition root (``core/di``) — the only place allowed
-to see two contexts at once — so the contexts themselves stay isolated. Each
-takes a *factory* for the source repository so it picks up the request-scoped,
-tenant-bound session at call time.
-"""
+"""Cross-context adapters wired at the composition root, keeping contexts isolated."""
 
 from __future__ import annotations
 

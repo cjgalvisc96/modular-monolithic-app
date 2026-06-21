@@ -1,5 +1,3 @@
-"""User aggregate root — pure domain, no ORM, no Pydantic."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

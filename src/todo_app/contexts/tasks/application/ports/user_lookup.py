@@ -1,9 +1,4 @@
-"""Consumer-defined port: what `tasks` needs to know about a user.
-
-`tasks` owns this interface (it expresses *its* needs); the `users` context
-provides an adapter at the root ApplicationContainer. `tasks` never imports
-`users` internals — preserving bounded-context isolation.
-"""
+"""Consumer-defined port owned by `tasks`; `users` provides the adapter at the root."""
 
 from __future__ import annotations
 

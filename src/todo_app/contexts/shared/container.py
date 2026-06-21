@@ -1,9 +1,4 @@
-"""SharedContainer — composition root for the shared kernel.
-
-Provides cross-cutting infrastructure (DB, cache, event bus, unit of work) that
-every other context's container consumes. Sibling to domain/application/
-infrastructure: it is the only place allowed to wire all three layers.
-"""
+"""SharedContainer — composition root; the only place allowed to wire all three layers."""
 
 from __future__ import annotations
 

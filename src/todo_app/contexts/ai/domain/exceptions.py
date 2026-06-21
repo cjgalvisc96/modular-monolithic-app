@@ -10,7 +10,5 @@ class InvalidPromptError(DomainValidationError):
 
 
 class InvalidModelIdentifierError(DomainValidationError):
-    """The model identifier was blank."""
-
     def __init__(self) -> None:
         super().__init__("Model identifier must not be empty")

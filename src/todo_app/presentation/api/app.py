@@ -1,9 +1,4 @@
-"""FastAPI application assembled via a Builder.
-
-Each private step configures one concern; ``create_api()`` returns the final
-app. The builder owns the Settings + DI container and exposes a health check
-that pings the real DB and Redis.
-"""
+"""FastAPI application assembled via a Builder."""
 
 from __future__ import annotations
 
@@ -35,7 +30,6 @@ class ApiBuilder:
         self._container = container or build_container(self._settings)
         self._app: FastAPI | None = None
 
-    # --- builder steps -------------------------------------------------------
     def mount_di_container(self, container: ApplicationContainer | None = None) -> ApiBuilder:
         if container is not None:
             self._container = container
@@ -91,16 +85,11 @@ class ApiBuilder:
             app.include_router(router, prefix="/api/v1")
 
     def _mount_documentation(self, app: FastAPI) -> None:
-        # FastAPI serves /docs and /redoc by default; kept explicit for clarity.
         app.docs_url = "/docs"
         app.redoc_url = "/redoc"
 
     def _mount_metrics(self, app: FastAPI) -> None:
-        """Expose Prometheus metrics at /metrics for scrape-based platforms.
-
-        The local-gitops OTel Collector scrapes pods by ``prometheus.io/*``
-        annotation (no OTLP receiver), so the app publishes a scrape endpoint.
-        """
+        """Expose Prometheus metrics at /metrics for scrape-based platforms."""
         from todo_app.presentation.api.metrics import (
             METRICS_PATH,
             PrometheusMiddleware,
@@ -118,7 +107,6 @@ class ApiBuilder:
         async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             app.state.container = container
             app.state.settings = settings
-            # Warm the DB pool (best-effort; health surfaces real status).
             with suppress(Exception):
                 await container.shared.database().ping()
             yield
@@ -128,7 +116,6 @@ class ApiBuilder:
 
         return lifespan
 
-    # --- assembly ------------------------------------------------------------
     def create_api(self) -> FastAPI:
         app = FastAPI(
             title="TODO App",
@@ -136,7 +123,6 @@ class ApiBuilder:
             debug=self._settings.debug,
             lifespan=self._create_lifespan(),
         )
-        # Ensure state is set even before lifespan (e.g. under TestClient calls).
         app.state.container = self._container
         app.state.settings = self._settings
         self._configure_middleware(app)

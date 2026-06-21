@@ -1,9 +1,4 @@
-"""GenerateTaskSuggestion use case.
-
-Builds a prompt from the user's current tasks (read via the cross-context
-TaskReadPort), invokes the LLM port, persists the suggestion, and returns it.
-Unit-testable with a fake LlmClient + fake TaskReadPort + in-memory repository.
-"""
+"""GenerateTaskSuggestion use case."""
 
 from __future__ import annotations
 

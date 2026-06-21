@@ -25,7 +25,6 @@ class UsersContainer(containers.DeclarativeContainer):
 
     email_uniqueness = providers.Factory(EmailUniquenessChecker, repository=user_repository)
 
-    # --- commands ---
     register_user_command = providers.Factory(
         RegisterUserCommand,
         repository=user_repository,
@@ -34,11 +33,9 @@ class UsersContainer(containers.DeclarativeContainer):
     )
     change_user_role_command = providers.Factory(ChangeUserRoleCommand, repository=user_repository)
 
-    # --- queries ---
     get_user_query = providers.Factory(GetUserByIdQuery, repository=user_repository)
     list_users_query = providers.Factory(ListUsersQuery, repository=user_repository)
 
-    # --- auth ---
     cognito_authenticator = providers.Singleton(
         CognitoAuthenticator,
         region=config.aws_region,

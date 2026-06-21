@@ -1,13 +1,4 @@
-"""API authentication, authorization, and tenant resolution.
-
-Auth is AWS Cognito: the bearer JWT is verified, then ``tenant_id`` and role
-claims are read and bound to the request scope (contextvar) ahead of any DB
-call, so the tenant-binding middleware / Unit of Work can issue
-``SET LOCAL app.tenant_id`` for RLS.
-
-A DEBUG-only header bypass (``X-Dev-Tenant`` / ``X-Dev-Roles``) lets the local
-stack and e2e tests exercise the full flow without standing up Cognito.
-"""
+"""API authentication, authorization, and tenant resolution."""
 
 from __future__ import annotations
 

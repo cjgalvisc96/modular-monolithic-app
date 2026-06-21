@@ -1,9 +1,4 @@
-"""Application-boundary DTOs for the users context.
-
-These are the application's input/output contract — plain dataclasses, distinct
-from API serializers (the HTTP boundary). They map cleanly but are not the same
-objects, so an HTTP-schema change never reaches into a use case.
-"""
+"""Application-boundary DTOs for the users context, distinct from API serializers."""
 
 from __future__ import annotations
 

@@ -1,8 +1,4 @@
-"""Deterministic local LLM stub.
-
-Used when DEBUG is set and no Bedrock credentials are available, so the AI flow
-works end-to-end locally without calling AWS. Tests use their own fakes.
-"""
+"""Deterministic local LLM stub for DEBUG runs without Bedrock credentials."""
 
 from __future__ import annotations
 

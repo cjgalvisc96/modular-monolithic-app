@@ -1,12 +1,4 @@
-"""Request-context middleware: correlation id + request logging.
-
-Tenant binding itself happens in the ``get_request_context`` dependency (see
-api/dependencies.py): verifying the Cognito JWT needs the DI container, and a
-``contextvar`` set inside a ``BaseHTTPMiddleware`` does not reliably propagate
-into the endpoint task. Binding in the dependency runs *before any DB call* —
-satisfying the "bind tenant ahead of DB access" requirement — while this
-middleware handles the cross-cutting concerns that are safe at the ASGI edge.
-"""
+"""Request-context middleware: correlation id + logging (tenant binding is in the dependency)."""
 
 from __future__ import annotations
 

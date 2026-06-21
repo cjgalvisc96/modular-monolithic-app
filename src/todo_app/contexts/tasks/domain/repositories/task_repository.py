@@ -1,5 +1,3 @@
-"""TaskRepository port — interface only, implemented in infrastructure."""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

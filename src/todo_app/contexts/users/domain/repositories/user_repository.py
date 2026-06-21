@@ -1,5 +1,3 @@
-"""UserRepository port — interface only, implemented in infrastructure."""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -12,11 +10,7 @@ if TYPE_CHECKING:
 
 
 class UserRepository(ABC):
-    """Persistence boundary for the User aggregate.
-
-    Implementations are tenant-scoped by RLS; methods never accept a tenant_id
-    argument because the active DB session already carries it.
-    """
+    """Tenant-scoped by RLS; methods take no tenant_id since the session already carries it."""
 
     @abstractmethod
     async def add(self, user: User) -> None: ...

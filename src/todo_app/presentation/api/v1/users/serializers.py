@@ -1,9 +1,4 @@
-"""HTTP serializers for the users context.
-
-These map to/from application DTOs (which derive from domain entities) — never
-from DB models. A persistence change can't alter the API contract without an
-explicit edit here.
-"""
+"""HTTP serializers for the users context; map to/from application DTOs, never DB models."""
 
 from __future__ import annotations
 

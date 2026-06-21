@@ -1,9 +1,4 @@
-"""Request-scoped current session holder.
-
-Repositories read the active session from here instead of receiving it through
-every constructor, so the DI graph stays static while the session is per-request.
-The Unit of Work sets/resets the contextvar around each operation.
-"""
+"""Request-scoped current session holder (contextvar set/reset by the Unit of Work)."""
 
 from __future__ import annotations
 

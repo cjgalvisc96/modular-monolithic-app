@@ -1,9 +1,4 @@
-"""Consumer-defined port: read-only task context the AI needs to build a prompt.
-
-`ai` owns this interface; `tasks`' read side satisfies it via an adapter wired at
-the root ApplicationContainer (the same explicit-wiring pattern as tasks→users).
-`ai` never imports `tasks` internals.
-"""
+"""Consumer-defined read-only port; `ai` owns it, `tasks` satisfies it via a root adapter."""
 
 from __future__ import annotations
 

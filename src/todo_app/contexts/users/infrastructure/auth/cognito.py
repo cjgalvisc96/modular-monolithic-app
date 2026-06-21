@@ -1,10 +1,4 @@
-"""AWS Cognito JWT verification.
-
-Cognito is the single source of truth for authentication. This verifies the
-RS256 signature against the pool's JWKS (fetched + cached), validates standard
-claims, and extracts the ``custom:tenant_id`` claim and ``cognito:groups`` roles
-injected by the pre-token-generation Lambda.
-"""
+"""AWS Cognito JWT verification — the single source of truth for authentication."""
 
 from __future__ import annotations
 
@@ -19,8 +13,7 @@ from jose.exceptions import JWTError
 from todo_app.contexts.shared.domain.exceptions import AuthenticationError
 
 
-class InvalidTokenError(AuthenticationError):
-    """Raised when a presented JWT fails verification."""
+class InvalidTokenError(AuthenticationError): ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,8 +62,6 @@ class CognitoAuthenticator:
 
     async def verify(self, token: str) -> CognitoClaims:
         try:
-            # Parse the header first (cheap, no network) so malformed tokens
-            # fail fast without triggering a JWKS fetch.
             headers = jwt.get_unverified_header(token)
             jwks = await self._get_jwks()
             key = self._find_key(jwks, headers.get("kid"))

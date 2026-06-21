@@ -8,10 +8,7 @@ from todo_app.contexts.shared.infrastructure.db.base_model import BaseModel
 
 class UserModel(BaseModel):
     __tablename__ = "users"
-    __table_args__ = (
-        # Email is unique within a tenant, not globally.
-        UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),)
 
     email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)

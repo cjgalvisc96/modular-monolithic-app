@@ -1,8 +1,4 @@
-"""Namespace-aware Redis cache wrapper.
-
-Namespaces come from CACHE_NAMESPACES; keys are stored as ``<namespace>:<key>``
-so each context's cache entries are partitioned and independently flushable.
-"""
+"""Namespace-aware Redis cache wrapper (keys stored as ``<namespace>:<key>``)."""
 
 from __future__ import annotations
 

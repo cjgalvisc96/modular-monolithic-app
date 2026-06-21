@@ -1,6 +1,4 @@
-"""AiContainer — wires the ai context. Receives a read-only task lookup port
-(``task_read_port``) from the root (ai → tasks). The LLM client is the Bedrock
-adapter, or a deterministic stub when DEBUG and no AWS creds are configured."""
+"""Wires the ai context; receives a read-only task lookup port from the root (ai → tasks)."""
 
 from __future__ import annotations
 
@@ -18,8 +16,6 @@ from todo_app.contexts.ai.infrastructure.db.repositories.sqlalchemy_suggestion_r
 
 
 def _build_llm_client(debug: bool, region: str):
-    """Use the real Bedrock adapter in non-debug; stub locally so the AI flow
-    works without AWS credentials."""
     if debug:
         return StubLlmClient()
     return BedrockLlmClient(region=region)
@@ -29,7 +25,6 @@ class AiContainer(containers.DeclarativeContainer):
     config = providers.Configuration()
     shared = providers.DependenciesContainer()
 
-    # Cross-context dependency satisfied at the root (tasks → ai read side).
     task_read_port = providers.Dependency()
 
     suggestion_repository = providers.Factory(SqlAlchemySuggestionRepository)

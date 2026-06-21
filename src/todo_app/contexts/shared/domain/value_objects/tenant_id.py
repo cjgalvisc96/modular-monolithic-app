@@ -6,7 +6,4 @@ from todo_app.contexts.shared.domain.value_objects.identifier import EntityId
 
 
 class TenantId(EntityId):
-    """Identifies the tenant that owns an aggregate.
-
-    Bound to the DB transaction (`SET LOCAL app.tenant_id`) and enforced by RLS.
-    """
+    """Tenant that owns an aggregate; bound to the DB transaction and enforced by RLS."""

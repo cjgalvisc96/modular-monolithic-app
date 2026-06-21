@@ -17,8 +17,6 @@ if TYPE_CHECKING:
 
 
 class Database:
-    """Owns the async engine and session factory for the whole app."""
-
     def __init__(
         self, dsn: str, *, echo: bool = False, pool_size: int = 10, max_overflow: int = 20
     ) -> None:
@@ -37,7 +35,6 @@ class Database:
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:
-        """Yield a session wrapped in a transaction (commit on success)."""
         async with self._sessionmaker() as session:
             try:
                 yield session
@@ -47,7 +44,6 @@ class Database:
                 raise
 
     async def ping(self) -> bool:
-        """Health probe used by /health."""
         from sqlalchemy import text
 
         async with self._engine.connect() as conn:

@@ -9,11 +9,7 @@ if TYPE_CHECKING:
 
 
 class AggregateRoot:
-    """Base for aggregate roots; records domain events for later publication.
-
-    The application layer pulls events via :meth:`pull_events` after persisting,
-    then hands them to the :class:`EventPublisher`.
-    """
+    """Base for aggregate roots; records domain events for later publication."""
 
     def __init__(self) -> None:
         self._events: list[DomainEvent] = []

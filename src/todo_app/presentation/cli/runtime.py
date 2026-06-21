@@ -1,5 +1,4 @@
-"""CLI runtime helpers — share the SAME ApplicationContainer + use cases as the
-API, so business logic is never duplicated between channels."""
+"""CLI runtime helpers — share the same ApplicationContainer and use cases as the API."""
 
 from __future__ import annotations
 

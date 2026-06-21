@@ -1,9 +1,4 @@
-"""Task aggregate root.
-
-The owner is referenced by a `UserId` value object — **not** a `User` entity —
-to preserve bounded-context isolation. The `tasks` context never imports `users`
-internals; it only knows an opaque owner identifier.
-"""
+"""Task aggregate root; the owner is an opaque id, not a `User` entity, to preserve isolation."""
 
 from __future__ import annotations
 

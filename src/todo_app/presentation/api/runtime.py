@@ -1,5 +1,3 @@
-"""Shared endpoint helpers: resolve the Unit of Work for the request."""
-
 from __future__ import annotations
 
 from fastapi import Depends, Request

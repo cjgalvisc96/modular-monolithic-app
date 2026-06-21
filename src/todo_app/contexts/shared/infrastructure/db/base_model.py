@@ -1,10 +1,4 @@
-"""Shared SQLAlchemy declarative base.
-
-Every tenant-owned table inherits these columns so soft-delete, audit, tenancy,
-and timestamps are uniform and impossible to forget. `tenant_id` is present on
-every row; RLS policies (migrations/policies/*.sql) compare it to the session's
-``app.tenant_id``.
-"""
+"""Shared SQLAlchemy declarative base for tenant-owned tables."""
 
 from __future__ import annotations
 
@@ -16,7 +10,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    """Declarative base; all models share a single MetaData/registry."""
+    pass
 
 
 class BaseModel(Base):

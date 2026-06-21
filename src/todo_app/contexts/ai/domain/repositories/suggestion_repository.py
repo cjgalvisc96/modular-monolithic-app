@@ -1,8 +1,4 @@
-"""Persistence port for AiSuggestion.
-
-Resolved open question (plan §5): AI suggestions ARE persisted, so history is
-queryable and tenant-isolated by RLS like every other aggregate.
-"""
+"""Persistence port for AiSuggestion."""
 
 from __future__ import annotations
 

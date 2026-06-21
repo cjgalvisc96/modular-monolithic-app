@@ -1,9 +1,4 @@
-"""Bedrock adapter implementing the LlmClient port via boto3.
-
-This is the ONLY module aware that the LLM is AWS Bedrock. It is scoped to
-BEDROCK_MODEL_ID and invoked from a pod whose IRSA role permits only
-``bedrock:InvokeModel`` on the specific model ARN.
-"""
+"""Bedrock adapter implementing LlmClient — the ONLY module aware the LLM is AWS Bedrock."""
 
 from __future__ import annotations
 
@@ -20,9 +15,6 @@ if TYPE_CHECKING:
 
 class BedrockLlmClient(LlmClient):
     def __init__(self, *, region: str, max_tokens: int = 512, client=None) -> None:
-        # The boto3 client is created lazily on first use so constructing this
-        # adapter (e.g. at DI/container build) never touches AWS or requires
-        # credentials. Tests inject a fake `client`.
         self._region = region
         self._max_tokens = max_tokens
         self._client = client
@@ -42,7 +34,6 @@ class BedrockLlmClient(LlmClient):
                 "messages": [{"role": "user", "content": str(prompt)}],
             }
         )
-        # boto3 is sync; run it off the event loop.
         response = await asyncio.to_thread(
             self._get_client().invoke_model,
             modelId=str(model),

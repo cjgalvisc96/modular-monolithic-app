@@ -7,8 +7,7 @@ from todo_app.contexts.ai.domain.exceptions import InvalidModelIdentifierError
 
 @dataclass(frozen=True, slots=True)
 class ModelIdentifier:
-    """An opaque model id (e.g. a Bedrock model id). The domain stays unaware
-    that this happens to name an AWS resource."""
+    """An opaque model id; the domain stays unaware it names an AWS resource."""
 
     value: str
 

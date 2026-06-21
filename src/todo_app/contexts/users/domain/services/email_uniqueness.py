@@ -1,5 +1,4 @@
-"""Domain service: email uniqueness is a rule spanning the whole User set,
-so it does not belong to a single User entity."""
+"""Email uniqueness spans the whole User set, so it is a domain service, not an entity rule."""
 
 from __future__ import annotations
 

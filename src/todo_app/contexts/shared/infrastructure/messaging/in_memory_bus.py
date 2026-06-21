@@ -1,8 +1,4 @@
-"""In-memory event publisher (local default).
-
-Implements the EventPublisher port. In the cloud this is swapped for an
-EventBridge/SQS adapter without touching domain or application code.
-"""
+"""In-memory event publisher implementing the EventPublisher port (local default)."""
 
 from __future__ import annotations
 

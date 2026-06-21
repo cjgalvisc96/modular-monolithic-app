@@ -1,10 +1,4 @@
-"""Prometheus metrics — a small scrape endpoint for the platform's collector.
-
-The local-gitops OTel Collector scrapes pods by ``prometheus.io/*`` annotation
-(it has no OTLP receiver), so the app publishes ``/metrics``. Labels are kept
-low-cardinality (method + status) and the path is NOT used as a label, which
-also avoids introspecting FastAPI's lazily-included routes.
-"""
+"""Prometheus metrics — a scrape endpoint for the platform's collector."""
 
 from __future__ import annotations
 

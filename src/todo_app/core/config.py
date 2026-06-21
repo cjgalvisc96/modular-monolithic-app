@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     log_level: str = "DEBUG"
     db_echo: bool = False
 
-    # Database
     db_host: str = "localhost"
     db_port: int = 5432
     db_name: str = "todo"
@@ -24,13 +23,11 @@ class Settings(BaseSettings):
     db_pool_size: int = 10
     db_pool_max_overflow: int = 20
 
-    # CORS
     cors_allow_origins: str = "*"
     cors_allow_credentials: bool = True
     cors_allow_methods: str = "*"
     cors_allow_headers: str = "*"
 
-    # Cache / Redis
     cache_enable: bool = True
     cache_namespaces: str = "users,tasks,ai"
     redis_host: str = "localhost"
@@ -42,14 +39,12 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_window_seconds: int = 60
 
-    # AWS / Cognito / Bedrock
     aws_region: str = "us-east-1"
     cognito_user_pool_id: str = ""
     cognito_app_client_id: str = ""
     cognito_domain: str = ""
     bedrock_model_id: str = "anthropic.claude-3-5-sonnet-20240620-v1:0"
 
-    # Observability
     otel_enable: bool = False
     otel_exporter_otlp_endpoint: str = ""
     otel_service_name: str = "todo-app"

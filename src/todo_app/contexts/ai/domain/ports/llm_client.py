@@ -1,9 +1,4 @@
-"""LLM client port.
-
-The domain depends only on this interface and has **no awareness** that the
-implementation is AWS Bedrock (or anything else). Swapping or mocking the LLM
-touches one adapter, never the domain or application layers.
-"""
+"""LLM client port; the domain has no awareness the implementation is AWS Bedrock."""
 
 from __future__ import annotations
 

@@ -10,11 +10,7 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class EventPublisher(Protocol):
-    """Publishes domain events to interested subscribers.
-
-    Implemented by the infrastructure messaging layer (in-memory bus locally,
-    EventBridge/SQS in the cloud). The domain only sees this port.
-    """
+    """Publishes domain events to interested subscribers."""
 
     async def publish(self, event: DomainEvent) -> None: ...
 

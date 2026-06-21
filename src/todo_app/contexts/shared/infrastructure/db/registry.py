@@ -1,8 +1,4 @@
-"""Single import point that registers every ORM model on the shared metadata.
-
-Importing this module ensures ``Base.metadata`` knows all tables (needed for
-``create_all`` in tests and for tooling that introspects the schema).
-"""
+"""Single import point that registers every ORM model on the shared metadata."""
 
 from __future__ import annotations
 

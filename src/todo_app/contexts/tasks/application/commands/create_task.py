@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 
 
 class CreateTaskCommand:
-    """Create a task, validating the owner exists via the cross-context port."""
-
     def __init__(
         self,
         repository: TaskRepository,

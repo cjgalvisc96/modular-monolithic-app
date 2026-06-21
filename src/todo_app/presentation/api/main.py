@@ -1,9 +1,4 @@
-"""ASGI entrypoint for the HTTP API.
-
-``app`` is the ASGI application — used by uvicorn and the container image:
-``uvicorn todo_app.presentation.api.main:app``. ``main()`` is the console-script
-runner wired to the ``todo-api`` entry point in pyproject.toml.
-"""
+"""ASGI entrypoint for the HTTP API."""
 
 from __future__ import annotations
 
@@ -22,11 +17,7 @@ setup_telemetry(app, container, settings)
 
 
 def main() -> None:
-    """Console-script entry point (``todo-api``): serve the API with uvicorn.
-
-    Hot-reload is enabled when ``API_RELOAD`` is truthy (set in the dev image),
-    off otherwise (prod). Host/port default to all-interfaces:8000 by design.
-    """
+    """Console-script entry point (``todo-api``): serve the API with uvicorn."""
     import os
 
     import uvicorn

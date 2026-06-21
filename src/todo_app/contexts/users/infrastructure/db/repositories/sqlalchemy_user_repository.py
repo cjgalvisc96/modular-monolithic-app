@@ -1,9 +1,4 @@
-"""SqlAlchemyUserRepository — implements the domain UserRepository port.
-
-Reads the active request session from the scoped-session holder. Soft-deleted
-rows are excluded; tenant scoping is enforced by RLS (the WHERE on tenant_id is
-defense-in-depth, not the security boundary).
-"""
+"""Tenant scoping is enforced by RLS; the WHERE on tenant_id is defense-in-depth only."""
 
 from __future__ import annotations
 

@@ -15,8 +15,7 @@ _EXEMPT = frozenset({"/health", "/metrics", "/", "/docs", "/redoc", "/openapi.js
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Redis-backed fixed-window rate limit, keyed by client IP. Fails open: if
-    Redis is unreachable, requests are allowed rather than rejected."""
+    """Redis-backed fixed-window rate limit keyed by client IP; fails open if Redis is down."""
 
     def __init__(self, app: object, *, limit: int, window: int, enabled: bool = True) -> None:
         super().__init__(app)  # type: ignore[arg-type]

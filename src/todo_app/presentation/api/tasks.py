@@ -1,8 +1,4 @@
-"""FastAPI background-task definitions (fire-and-forget work).
-
-Each runs in its own Unit of Work, re-binding the tenant context, so it remains
-RLS-scoped after the HTTP response has been sent.
-"""
+"""FastAPI background-task definitions; each runs in its own tenant-scoped Unit of Work."""
 
 from __future__ import annotations
 

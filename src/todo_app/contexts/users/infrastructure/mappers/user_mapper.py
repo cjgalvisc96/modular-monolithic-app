@@ -35,7 +35,6 @@ class UserMapper:
 
     @staticmethod
     def apply(entity: User, model: UserModel) -> None:
-        """Copy entity state onto an already-loaded model (for updates)."""
         model.email = str(entity.email)
         model.full_name = entity.full_name
         model.role = entity.role.value

@@ -1,9 +1,3 @@
-"""RegisterUser use case (write side).
-
-Depends only on domain ports (repository, uniqueness service, event publisher)
-injected via the constructor — fully unit-testable with in-memory fakes.
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

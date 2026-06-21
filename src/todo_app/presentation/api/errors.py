@@ -1,7 +1,4 @@
-"""Maps domain exceptions to HTTP responses at the transport boundary.
-
-The domain raises framework-free errors; only here do they become status codes.
-"""
+"""Maps domain exceptions to HTTP responses at the transport boundary."""
 
 from __future__ import annotations
 
