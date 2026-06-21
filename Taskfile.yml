@@ -448,6 +448,28 @@ tasks:
     cmds:
       - docker run --rm -v "$PWD/migrations:/work" -w /work {{.ATLAS_IMAGE}} migrate hash --dir file://versions
 
+  # --- docs (mkdocs project documentation site; separate from FastAPI /docs) -
+  docs:serve:
+    desc: 'Serve the mkdocs documentation site at http://127.0.0.1:8001 (API uses :8000)'
+    cmds:
+      - "{{.PY}} --group docs mkdocs serve -a 127.0.0.1:8001"
+
+  docs:build:
+    desc: 'Build the mkdocs documentation site into ./site'
+    cmds:
+      - "{{.PY}} --group docs mkdocs build --strict"
+
+  # --- datastore access (floci-backed Aurora / ElastiCache) -----------------
+  aurora:cli:
+    desc: 'Open a psql shell on the floci Aurora (Postgres) backing'
+    cmds:
+      - docker exec -it -e PGPASSWORD=todopassword floci-rds-todo-aurora psql -U todo -d todo
+
+  cache:cli:
+    desc: 'Open a valkey-cli (Redis) shell on the floci ElastiCache backing'
+    cmds:
+      - docker exec -it floci-valkey-todo-redis valkey-cli
+
   # --- seed -----------------------------------------------------------------
   seed:demo:
     desc: 'Run the demo-data seeder init container against the running stack (idempotent)'
@@ -470,7 +492,7 @@ tasks:
         task terraform:init ENV=local
         task terraform:apply ENV=local AUTO_APPROVE=true
       - task: floci:wait-datastores
-      - "{{.COMPOSE}} up -d --build --wait app"
+      - "{{.COMPOSE}} up -d --build --wait app aurora-fwd cache-fwd"
 
   docker:up:
     desc: 'Clean caches, then ordered local stack: floci → setup (terraform ENV=local) → app, then stream API logs'

@@ -74,6 +74,33 @@ services:
     networks: [todo-app-net]
     restart: unless-stopped
 
+  # floci spawns the datastore backings without published ports; these socat
+  # bridges expose them on the host so local tools connect at the usual ports:
+  #   Aurora -> localhost:5432   ElastiCache -> localhost:6379
+  aurora-fwd:
+    image: alpine/socat
+    container_name: todo-app-aurora-fwd
+    command: tcp-listen:5432,fork,reuseaddr tcp-connect:floci-rds-todo-aurora:5432
+    ports:
+      - "5432:5432"
+    depends_on:
+      floci:
+        condition: service_started
+    networks: [todo-app-net]
+    restart: unless-stopped
+
+  cache-fwd:
+    image: alpine/socat
+    container_name: todo-app-cache-fwd
+    command: tcp-listen:6379,fork,reuseaddr tcp-connect:floci-valkey-todo-redis:6379
+    ports:
+      - "6379:6379"
+    depends_on:
+      floci:
+        condition: service_started
+    networks: [todo-app-net]
+    restart: unless-stopped
+
 networks:
   todo-app-net:
     name: todo-app-net

@@ -45,6 +45,9 @@ test = [
 lint = [
     "ruff>=0.5",
 ]
+docs = [
+    "mkdocs-material>=9.5",
+]
 observability = [
     "opentelemetry-sdk>=1.25",
     "opentelemetry-exporter-otlp>=1.25",
