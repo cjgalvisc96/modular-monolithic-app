@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from todo_app.contexts.shared.domain.exceptions import EntityNotFoundError
 from todo_app.contexts.tasks.application.dto.task_dto import TaskOutput
+from todo_app.contexts.tasks.domain.exceptions import TaskNotFoundError
 from todo_app.contexts.tasks.domain.value_objects.task_id import TaskId
 
 if TYPE_CHECKING:
@@ -19,5 +19,5 @@ class GetTaskQuery:
     async def execute(self, task_id: UUID) -> TaskOutput:
         task = await self._repository.get(TaskId(task_id))
         if task is None:
-            raise EntityNotFoundError("Task", task_id)
+            raise TaskNotFoundError(task_id)
         return TaskOutput.from_entity(task)

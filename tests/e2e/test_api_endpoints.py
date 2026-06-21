@@ -24,7 +24,7 @@ async def test_users_read_and_role_change(api_client, tenant_id):
     user = await _make_user(api_client, h)
 
     r = await api_client.get("/api/v1/users", headers=h)
-    assert r.status_code == 200 and len(r.json()) == 1
+    assert r.status_code == 200 and len(r.json()["items"]) == 1
 
     r = await api_client.get(f"/api/v1/users/{user['id']}", headers=h)
     assert r.status_code == 200 and r.json()["email"] == "u@acme.example.com"
@@ -71,7 +71,7 @@ async def test_task_read_update_and_filter(api_client, tenant_id):
     r = await api_client.get(
         f"/api/v1/tasks?owner_id={user['id']}&status_filter=pending", headers=h
     )
-    assert r.status_code == 200 and len(r.json()) == 1
+    assert r.status_code == 200 and len(r.json()["items"]) == 1
 
 
 async def test_ai_inline_and_background_and_list(api_client, tenant_id):
@@ -89,7 +89,7 @@ async def test_ai_inline_and_background_and_list(api_client, tenant_id):
     assert r.status_code == 200  # 200 with null body for background dispatch
 
     r = await api_client.get("/api/v1/ai/suggestions", headers=h)
-    assert r.status_code == 200 and len(r.json()) >= 1
+    assert r.status_code == 200 and len(r.json()["items"]) >= 1
 
 
 async def test_invalid_bearer_token_401(api_client):

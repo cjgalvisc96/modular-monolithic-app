@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from todo_app.contexts.shared.application.page import Page
 from todo_app.contexts.tasks.application.dto.task_dto import TaskOutput
 from todo_app.contexts.tasks.domain.entities.task import OwnerId
 from todo_app.contexts.tasks.domain.value_objects.task_status import TaskStatus
@@ -23,11 +24,12 @@ class ListTasksQuery:
         status: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[TaskOutput]:
+    ) -> Page[TaskOutput]:
+        owner = OwnerId(owner_id) if owner_id else None
+        task_status = TaskStatus.parse(status) if status else None
         tasks = await self._repository.list(
-            owner_id=OwnerId(owner_id) if owner_id else None,
-            status=TaskStatus.parse(status) if status else None,
-            limit=limit,
-            offset=offset,
+            owner_id=owner, status=task_status, limit=limit, offset=offset
         )
-        return [TaskOutput.from_entity(t) for t in tasks]
+        total = await self._repository.count(owner_id=owner, status=task_status)
+        items = [TaskOutput.from_entity(t) for t in tasks]
+        return Page(items=items, total=total, limit=limit, offset=offset)

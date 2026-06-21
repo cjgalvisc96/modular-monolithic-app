@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from todo_app.contexts.shared.domain.exceptions import DomainValidationError
+from todo_app.contexts.ai.domain.exceptions import InvalidModelIdentifierError
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,7 +14,7 @@ class ModelIdentifier:
 
     def __post_init__(self) -> None:
         if not self.value.strip():
-            raise DomainValidationError("Model identifier must not be empty")
+            raise InvalidModelIdentifierError()
 
     def __str__(self) -> str:
         return self.value

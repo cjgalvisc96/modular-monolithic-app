@@ -52,4 +52,4 @@ async def test_list_suggestions(repo, tenant_id):
     cmd = GenerateTaskSuggestionCommand(repo, llm, FakeTaskRead([]), "model-x")
     await cmd.execute(tenant_id, GenerateSuggestionInput(owner_id=tenant_id))
     listed = await ListSuggestionsQuery(repo).execute()
-    assert len(listed) == 1
+    assert listed.total == 1 and len(listed.items) == 1

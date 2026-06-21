@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from todo_app.contexts.ai.domain.repositories.suggestion_repository import (
     SuggestionRepository,
@@ -40,6 +40,15 @@ class SqlAlchemySuggestionRepository(SuggestionRepository):
         )
         models = (await session.execute(stmt)).scalars().all()
         return [SuggestionMapper.to_entity(m) for m in models]
+
+    async def count(self) -> int:
+        session = current_session()
+        stmt = (
+            select(func.count())
+            .select_from(AiSuggestionModel)
+            .where(AiSuggestionModel.deleted_at.is_(None))
+        )
+        return int((await session.execute(stmt)).scalar_one())
 
     async def update(self, suggestion: AiSuggestion) -> None:
         session = current_session()

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from todo_app.contexts.shared.infrastructure.db.scoped_session import current_session
 from todo_app.contexts.users.domain.repositories.user_repository import UserRepository
@@ -54,6 +54,11 @@ class SqlAlchemyUserRepository(UserRepository):
         )
         models = (await session.execute(stmt)).scalars().all()
         return [UserMapper.to_entity(m) for m in models]
+
+    async def count(self) -> int:
+        session = current_session()
+        stmt = select(func.count()).select_from(UserModel).where(UserModel.deleted_at.is_(None))
+        return int((await session.execute(stmt)).scalar_one())
 
     async def update(self, user: User) -> None:
         session = current_session()

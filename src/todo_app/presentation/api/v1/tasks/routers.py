@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, status
 
 from todo_app.contexts.shared.application.request_context import RequestContext
 from todo_app.presentation.api.dependencies import get_container, get_request_context
+from todo_app.presentation.api.pagination import PageResponse
 from todo_app.presentation.api.runtime import get_uow
 from todo_app.presentation.api.v1.tasks.serializers import (
     CreateTaskRequest,
@@ -29,7 +30,7 @@ async def create_task(
     return TaskResponse.from_output(result)
 
 
-@router.get("", response_model=list[TaskResponse])
+@router.get("", response_model=PageResponse[TaskResponse])
 async def list_tasks(
     owner_id: UUID | None = None,
     status_filter: str | None = None,
@@ -38,13 +39,13 @@ async def list_tasks(
     ctx: RequestContext = Depends(get_request_context),
     container=Depends(get_container),
     uow=Depends(get_uow),
-) -> list[TaskResponse]:
+) -> PageResponse[TaskResponse]:
     query = container.tasks.list_tasks_query()
     async with uow.begin():
-        results = await query.execute(
+        page = await query.execute(
             owner_id=owner_id, status=status_filter, limit=limit, offset=offset
         )
-    return [TaskResponse.from_output(r) for r in results]
+    return PageResponse.from_page(page, TaskResponse.from_output)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)

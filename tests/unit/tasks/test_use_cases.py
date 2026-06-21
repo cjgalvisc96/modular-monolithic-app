@@ -99,11 +99,11 @@ async def test_get_and_list_tasks(create, repo, tenant_id, owner_id):
     got = await GetTaskQuery(repo).execute(out_b.id)
     assert got.title == "B"
     listed = await ListTasksQuery(repo).execute(owner_id=owner_id)
-    assert len(listed) == 2
+    assert listed.total == 2 and len(listed.items) == 2
 
 
 async def test_list_filters_by_status(create, repo, tenant_id, owner_id):
     out = await create.execute(tenant_id, CreateTaskInput(owner_id, "A"))
     await CompleteTaskCommand(repo, FakeEventPublisher()).execute(out.id)
     completed = await ListTasksQuery(repo).execute(status="completed")
-    assert len(completed) == 1
+    assert completed.total == 1 and len(completed.items) == 1

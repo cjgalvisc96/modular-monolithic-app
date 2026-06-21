@@ -1,21 +1,13 @@
-# Local-only Terraform stack targeting floci (the local AWS emulator). It stands
-# in for the cloud dev/prod stacks during the docker-compose flow, provisioning
-# ONLY the AWS resources floci can emulate: the ECR repo + the SSM parameters the
-# app / GitOps ExternalSecret consume. The managed control-plane services the
-# real stacks create (VPC, EKS, Aurora, ElastiCache, CloudFront, Cognito,
-# Route53) cannot run on floci and are intentionally absent here.
-#
-# Resources are kept minimal (no KMS/lifecycle/encryption hardening) for floci
-# API compatibility; this stack is excluded from the Trivy IaC gate for that
-# reason (see `task terraform:trivy`).
+# floci-targeted local stack: the resources floci can emulate — ECR, SSM, and
+# the datastores (Aurora + ElastiCache), which floci backs with postgres/valkey
+# containers on the project network. The real cloud stacks live under
+# environments/. Excluded from the Trivy gate (deliberately un-hardened).
 
 provider "aws" {
   region     = var.region
   access_key = "test"
   secret_key = "test"
 
-  # floci is not real AWS — skip every call the provider would make to the real
-  # metadata / IAM / STS endpoints, and route the service APIs at floci.
   skip_credentials_validation = true
   skip_requesting_account_id  = true
   skip_metadata_api_check     = true
@@ -23,22 +15,22 @@ provider "aws" {
   s3_use_path_style           = true
 
   endpoints {
-    ecr = var.floci_endpoint
-    ssm = var.floci_endpoint
-    sts = var.floci_endpoint
-    iam = var.floci_endpoint
-    s3  = var.floci_endpoint
+    ecr         = var.floci_endpoint
+    ssm         = var.floci_endpoint
+    sts         = var.floci_endpoint
+    iam         = var.floci_endpoint
+    s3          = var.floci_endpoint
+    rds         = var.floci_endpoint
+    elasticache = var.floci_endpoint
   }
 }
 
-# --- ECR: the app image registry ------------------------------------------
 resource "aws_ecr_repository" "app" {
   name                 = var.repository_name
-  image_tag_mutability = "MUTABLE" # local: allow re-pushing the same tag
-  force_delete         = true      # local: destroy even with images present
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
 }
 
-# --- SSM: secrets the app / GitOps consume (/gitops/<env>/todo-app/*) ------
 locals {
   ssm_params = merge([
     for env in var.environments : {
@@ -55,4 +47,32 @@ resource "aws_ssm_parameter" "todo_app" {
   type      = each.value.type
   value     = each.value.value
   overwrite = true
+}
+
+# floci reports engine="postgres"/"valkey" and a different cluster shape than the
+# provider expects; ignore_changes keeps re-applies idempotent.
+resource "aws_rds_cluster" "aurora" {
+  cluster_identifier  = "todo-aurora"
+  engine              = "aurora-postgresql"
+  master_username     = "todo"
+  master_password     = var.db_password
+  database_name       = "todo"
+  skip_final_snapshot = true
+  apply_immediately   = true
+
+  lifecycle {
+    ignore_changes = [engine, engine_mode]
+  }
+}
+
+resource "aws_elasticache_replication_group" "redis" {
+  replication_group_id = "todo-redis"
+  description          = "todo local cache"
+  engine               = "redis"
+  node_type            = "cache.t3.micro"
+  num_cache_clusters   = 1
+
+  lifecycle {
+    ignore_changes = [engine, num_cache_clusters]
+  }
 }

@@ -21,12 +21,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-editable || uv pip install -e .
 
 # --- Dev: hot reload for local development ----------------------------------
+# Uses the `todo-api` console script (installed into the venv by `uv sync` in
+# the builder); API_RELOAD=1 makes main() start uvicorn with --reload.
 FROM base AS dev
 COPY --from=builder /opt/venv /opt/venv
 COPY . .
+ENV API_RELOAD=1
 EXPOSE 8000
-CMD ["uvicorn", "todo_app.main:app", "--host", "0.0.0.0", "--port", "8000", \
-     "--reload", "--reload-dir", "src"]
+CMD ["todo-api"]
 
 # --- Prod: lean runtime image -----------------------------------------------
 FROM base AS prod
@@ -36,4 +38,4 @@ COPY migrations ./migrations
 RUN useradd --create-home --uid 1000 appuser && chown -R appuser /app
 USER appuser
 EXPOSE 8000
-CMD ["uvicorn", "todo_app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["todo-api"]

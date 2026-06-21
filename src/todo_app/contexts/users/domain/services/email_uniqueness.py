@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from todo_app.contexts.shared.domain.exceptions import ConflictError
+from todo_app.contexts.users.domain.exceptions import EmailAlreadyRegisteredError
 
 if TYPE_CHECKING:
     from todo_app.contexts.shared.domain.value_objects.email import Email
@@ -19,4 +19,4 @@ class EmailUniquenessChecker:
     async def ensure_unique(self, email: Email) -> None:
         existing = await self._repository.get_by_email(email)
         if existing is not None:
-            raise ConflictError(f"Email already registered: {email}")
+            raise EmailAlreadyRegisteredError(email)

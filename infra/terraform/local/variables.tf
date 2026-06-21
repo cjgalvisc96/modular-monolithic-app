@@ -21,3 +21,9 @@ variable "environments" {
   type        = list(string)
   default     = ["dev", "prod"]
 }
+
+variable "db_password" {
+  description = "Aurora master password (local only; ≥8 chars per RDS rules)."
+  type        = string
+  default     = "todopassword"
+}

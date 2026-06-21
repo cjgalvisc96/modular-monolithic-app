@@ -6,8 +6,10 @@ from todo_app.contexts.shared.domain.exceptions import DomainValidationError
 from todo_app.contexts.shared.domain.value_objects.tenant_id import TenantId
 from todo_app.contexts.tasks.application.dto.task_dto import CreateTaskInput, TaskOutput
 from todo_app.contexts.tasks.domain.entities.task import OwnerId, Task
+from todo_app.core.logging import get_logger
 
 if TYPE_CHECKING:
+    from logging import Logger
     from uuid import UUID
 
     from todo_app.contexts.shared.domain.events.publisher import EventPublisher
@@ -23,10 +25,12 @@ class CreateTaskCommand:
         repository: TaskRepository,
         user_lookup: UserLookupPort,
         publisher: EventPublisher,
+        logger: Logger | None = None,
     ) -> None:
         self._repository = repository
         self._user_lookup = user_lookup
         self._publisher = publisher
+        self._logger = logger or get_logger(__name__)
 
     async def execute(self, tenant_id: UUID, data: CreateTaskInput) -> TaskOutput:
         owner = await self._user_lookup.find(data.owner_id)
@@ -41,4 +45,7 @@ class CreateTaskCommand:
         )
         await self._repository.add(task)
         await self._publisher.publish_all(task.pull_events())
+        self._logger.info(
+            "task.created", extra={"tenant_id": str(tenant_id), "task_id": str(task.id.value)}
+        )
         return TaskOutput.from_entity(task)

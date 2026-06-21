@@ -13,8 +13,10 @@ from todo_app.contexts.shared.domain.value_objects.tenant_id import TenantId
 from todo_app.contexts.users.application.dto.user_dto import RegisterUserInput, UserOutput
 from todo_app.contexts.users.domain.entities.user import User
 from todo_app.contexts.users.domain.value_objects.role import Role
+from todo_app.core.logging import get_logger
 
 if TYPE_CHECKING:
+    from logging import Logger
     from uuid import UUID
 
     from todo_app.contexts.shared.domain.events.publisher import EventPublisher
@@ -28,10 +30,12 @@ class RegisterUserCommand:
         repository: UserRepository,
         uniqueness: EmailUniquenessChecker,
         publisher: EventPublisher,
+        logger: Logger | None = None,
     ) -> None:
         self._repository = repository
         self._uniqueness = uniqueness
         self._publisher = publisher
+        self._logger = logger or get_logger(__name__)
 
     async def execute(self, tenant_id: UUID, data: RegisterUserInput) -> UserOutput:
         email = Email(data.email)
@@ -44,4 +48,8 @@ class RegisterUserCommand:
         )
         await self._repository.add(user)
         await self._publisher.publish_all(user.pull_events())
+        self._logger.info(
+            "user.registered",
+            extra={"tenant_id": str(tenant_id), "user_id": str(user.id.value)},
+        )
         return UserOutput.from_entity(user)

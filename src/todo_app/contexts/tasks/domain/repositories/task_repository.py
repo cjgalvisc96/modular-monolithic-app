@@ -29,6 +29,11 @@ class TaskRepository(ABC):
     ) -> list[Task]: ...
 
     @abstractmethod
+    async def count(
+        self, *, owner_id: OwnerId | None = None, status: TaskStatus | None = None
+    ) -> int: ...
+
+    @abstractmethod
     async def update(self, task: Task) -> None: ...
 
     @abstractmethod

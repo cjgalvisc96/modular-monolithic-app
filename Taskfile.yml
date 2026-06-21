@@ -28,7 +28,7 @@ vars:
   # --- Atlas (DB migrations; run via the Atlas Docker image, no host install) ---
   ATLAS_IMAGE: '{{.ATLAS_IMAGE | default "arigaio/atlas:latest"}}'
   ATLAS_NET: '{{.PROJECT}}-net' # compose network the running Postgres is on
-  DB_URL: '{{.DB_URL | default "postgres://todo:todo@postgres:5432/todo?sslmode=disable"}}'
+  DB_URL: '{{.DB_URL | default "postgres://todo:todopassword@floci-rds-todo-aurora:5432/todo?sslmode=disable"}}'
 
 env:
   PYTHONPATH: "src"
@@ -63,10 +63,12 @@ tasks:
 
   # --- env ------------------------------------------------------------------
   env:create:
-    desc: Bootstrap the virtualenv and sync all dependency groups (uv)
+    desc: Bootstrap the virtualenv, sync all dependency groups (uv), and seed .env
     deps: [deps:check]
     cmds:
-      - bash scripts/create_venv.sh
+      - uv venv
+      - uv sync --group dev --group test --group lint
+      - '[ -f .env ] || cp .env.example .env'
 
   # --- check (static quality gates) -----------------------------------------
   check:linter:
@@ -389,9 +391,23 @@ tasks:
           echo "ssm: ${pfx}/{DB_USER,DB_PASSWORD,REDIS_PASSWORD}"
         done
 
-  # --- atlas (DB schema migrations; wraps the Atlas Docker image) -----------
-  # DB-touching commands run on the project network and need the stack up
-  # (task docker:up). The app's schema lives in migrations/versions/*.sql.
+  floci:wait-datastores:
+    desc: 'Wait until the floci-provisioned Aurora backing accepts connections (fails loudly if not)'
+    preconditions:
+      - sh: command -v docker
+        msg: "Docker not found. Install: https://docs.docker.com/engine/install/"
+    cmds:
+      - |
+        ready=""
+        for _ in $(seq 1 45); do
+          docker run --rm --network {{.PROJECT}}-net -e PGPASSWORD=todopassword postgres:16-alpine \
+            pg_isready -h floci-rds-todo-aurora -U todo -d todo >/dev/null 2>&1 && { ready=1; break; }
+          sleep 2
+        done
+        [ -n "$ready" ] || { echo "ERROR: Aurora (floci-rds-todo-aurora) never became ready" >&2; exit 1; }
+        echo "aurora ready"
+
+  # --- atlas (DB schema migrations via the Atlas Docker image) --------------
   atlas:migrate:
     desc: 'Apply pending Atlas migrations to the running Postgres (creates tables + RLS)'
     preconditions:
@@ -433,32 +449,21 @@ tasks:
       - docker run --rm -v "$PWD/migrations:/work" -w /work {{.ATLAS_IMAGE}} migrate hash --dir file://versions
 
   # --- docker ---------------------------------------------------------------
-  # Ordered bring-up mirrors the real pipeline: floci → setup (terraform/seed) →
-  # app. floci and its provisioning must complete BEFORE the app boots, so the
-  # app service is started last (not together with floci). Internal so both
-  # docker:up (streams logs) and docker:test (smoke-checks) can reuse it.
   docker:_bringup:
     internal: true
     deps: [deps:check]
     cmds:
-      # 1. floci first (plus the data services the app needs), wait until healthy.
-      - "{{.COMPOSE}} up -d --wait floci postgres redis"
-      # 2. provision floci via Terraform (ENV=local: ECR + SSM) before the app
-      #    boots. Falls back to the AWS-CLI seed if terraform isn't installed.
+      - "{{.COMPOSE}} up -d --wait floci"
       - |
         export TF_VAR_floci_endpoint="{{.FLOCI_ENDPOINT}}"
-        if command -v terraform >/dev/null 2>&1; then
-          task terraform:init ENV=local
-          task terraform:apply ENV=local AUTO_APPROVE=true
-        elif command -v aws >/dev/null 2>&1; then
-          echo "Terraform not found — falling back to AWS-CLI seeding (task floci:seed)."
-          task floci:seed
-        else
-          echo "Neither terraform nor aws found — skipping floci provisioning (ECR/SSM)."
+        if ! command -v terraform >/dev/null 2>&1; then
+          echo "Terraform is required to provision the floci stack (ECR/SSM + Aurora/ElastiCache)." >&2
+          echo "Install: https://developer.hashicorp.com/terraform/install" >&2
+          exit 1
         fi
-      # 3. app last. Compose runs the one-shot `atlas` service first via
-      #    depends_on(service_completed_successfully), so the schema + RLS exist
-      #    before the API container starts — even on a raw `docker compose up`.
+        task terraform:init ENV=local
+        task terraform:apply ENV=local AUTO_APPROVE=true
+      - task: floci:wait-datastores
       - "{{.COMPOSE}} up -d --build --wait app"
 
   docker:up:
@@ -478,10 +483,9 @@ tasks:
   docker:prune:
     desc: Remove ALL todo-app docker resources — containers, images, volumes, networks (keeps local-gitops)
     cmds:
-      # 1. Graceful compose teardown: project containers, named volumes, network, orphans.
       - "{{.COMPOSE}} down -v --remove-orphans 2>/dev/null || true"
-      # 2. Sweep anything left that is named/tagged for this app. Name/reference
-      #    scoping deliberately spares the local-gitops floci + gitops/todo-app image.
+      # Sweep anything left named/tagged for this app; spares the local-gitops
+      # floci and the gitops/todo-app image.
       - |
         set -e
         ids=$(docker ps -aq --filter "name=todo-app" 2>/dev/null || true)
@@ -492,8 +496,9 @@ tasks:
         [ -n "$vols" ] && { docker volume rm $vols >/dev/null;    echo "volumes removed: $(echo $vols | wc -w)"; }     || true
         nets=$(docker network ls -q --filter "name=todo-app" 2>/dev/null || true)
         [ -n "$nets" ] && { docker network rm $nets >/dev/null 2>&1; echo "networks removed: $(echo $nets | wc -w)"; } || true
+        docker rm -f floci-rds-todo-aurora floci-valkey-todo-redis >/dev/null 2>&1 || true
+        rm -f {{.TF_DIR}}/local/terraform.tfstate {{.TF_DIR}}/local/terraform.tfstate.backup 2>/dev/null || true
         echo "Pruned all todo-app docker resources."
-      # 3. clean local caches (venv, pytest/ruff, terraform/terragrunt, observability).
       - task: clean:cache
 
   docker:shell:
@@ -536,17 +541,18 @@ tasks:
         printf '%s' "$health" | grep -q '"database":"ok"' && ok "app → database: ok" || bad "app → database NOT ok"
         printf '%s' "$health" | grep -q '"redis":"ok"'    && ok "app → redis: ok"    || bad "app → redis NOT ok"
 
-        echo "── 2. PostgreSQL (direct connection + schema) ──"
-        if v=$({{.COMPOSE}} exec -T postgres psql -U todo -d todo -tAc 'show server_version' 2>/dev/null | tr -d '\r'); then
-          ok "postgres reachable (v$v)"
+        echo "── 2. Aurora (Postgres via floci RDS) — direct connection + schema ──"
+        PG="docker run --rm --network {{.PROJECT}}-net -e PGPASSWORD=todopassword postgres:16-alpine psql -h floci-rds-todo-aurora -U todo -d todo -tAc"
+        if v=$($PG 'show server_version' 2>/dev/null | tr -d '\r'); then
+          ok "aurora reachable (v$v)"
         else
-          bad "postgres not reachable"
+          bad "aurora (floci-rds-todo-aurora) not reachable"
         fi
-        n=$({{.COMPOSE}} exec -T postgres psql -U todo -d todo -tAc "select count(*) from information_schema.tables where table_schema='public' and table_name in ('users','tasks','ai_suggestions')" 2>/dev/null | tr -d '\r')
-        [ "$n" = "3" ] && ok "schema migrated (users, tasks, ai_suggestions)" || bad "schema NOT migrated ($n/3 tables) — run: task atlas:migrate"
+        n=$($PG "select count(*) from information_schema.tables where table_schema='public' and table_name in ('users','tasks','ai_suggestions')" 2>/dev/null | tr -d '\r')
+        [ "$n" = "3" ] && ok "schema migrated (users, tasks, ai_suggestions)" || bad "schema NOT migrated ($n/3 tables)"
 
-        echo "── 3. Redis (direct connection) ──"
-        [ "$({{.COMPOSE}} exec -T redis redis-cli ping 2>/dev/null | tr -d '\r')" = "PONG" ] && ok "redis PONG" || bad "redis no PONG"
+        echo "── 3. ElastiCache (Redis via floci) — direct connection ──"
+        [ "$(docker run --rm --network {{.PROJECT}}-net redis:7-alpine redis-cli -h floci-valkey-todo-redis ping 2>/dev/null | tr -d '\r')" = "PONG" ] && ok "elasticache PONG" || bad "elasticache no PONG"
 
         echo "── 4. floci (AWS) integration — from INSIDE the app container ──"
         out=$({{.COMPOSE}} exec -T app python -c "import boto3,os; ep=os.environ.get('AWS_ENDPOINT_URL'); ecr=boto3.client('ecr',endpoint_url=ep); r=[x['repositoryName'] for x in ecr.describe_repositories()['repositories']]; ssm=boto3.client('ssm',endpoint_url=ep); val=ssm.get_parameter(Name='/gitops/dev/todo-app/DB_USER')['Parameter']['Value']; print('EP=%s ECR=%s SSM:/gitops/dev/todo-app/DB_USER=%s'%(ep,r,val))" 2>&1 || true)

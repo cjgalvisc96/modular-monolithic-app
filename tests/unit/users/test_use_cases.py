@@ -73,4 +73,4 @@ async def test_list_users(register, repo, tenant_id):
     await register.execute(tenant_id, RegisterUserInput("e@b.com", "Ed"))
     await register.execute(tenant_id, RegisterUserInput("f@b.com", "Fi"))
     listed = await ListUsersQuery(repo).execute()
-    assert len(listed) == 2
+    assert listed.total == 2 and len(listed.items) == 2

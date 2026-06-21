@@ -1,5 +1,8 @@
-# Consistent naming convention across the stack:
-#   service / container: todo-app-<role>   network: todo-app-net   volume: todo-app-<role>-data
+# Datastores are simulated by floci (local AWS): app/atlas reach the
+# floci-spawned Aurora (floci-rds-todo-aurora) and ElastiCache/Valkey
+# (floci-valkey-todo-redis) backings on todo-app-net. Terraform provisions them
+# (infra/terraform/local); use `task docker:up` (a raw `docker compose up` will
+# not provision floci resources).
 name: todo-app
 
 services:
@@ -10,32 +13,17 @@ services:
     image: local/todo-app:dev
     container_name: todo-app-api
     env_file: .env
-    environment:
-      DB_HOST: postgres
-      REDIS_HOST: redis
-      # Point the AWS SDK (boto3/Bedrock) at floci, the local AWS emulator.
-      AWS_ENDPOINT_URL: http://floci:4566
-      AWS_REGION: us-east-1
-      AWS_DEFAULT_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
     ports:
       - "8000:8000"
     volumes:
       - ./src:/app/src
       - ./migrations:/app/migrations
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
       floci:
         condition: service_started
-      # The API cannot start until the schema migration has completed.
       atlas:
         condition: service_completed_successfully
-    networks:
-      - todo-app-net
+    networks: [todo-app-net]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
       interval: 10s
@@ -43,67 +31,20 @@ services:
       retries: 5
       start_period: 20s
 
-  postgres:
-    image: postgres:16-alpine
-    container_name: todo-app-postgres
-    environment:
-      POSTGRES_USER: ${DB_USER:-todo}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-todo}
-      POSTGRES_DB: ${DB_NAME:-todo}
-    ports:
-      - "5432:5432"
-    volumes:
-      - todo-app-postgres-data:/var/lib/postgresql/data
-      - ./docker/init:/docker-entrypoint-initdb.d:ro
-    networks:
-      - todo-app-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-todo} -d ${DB_NAME:-todo}"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  redis:
-    image: redis:7-alpine
-    container_name: todo-app-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - todo-app-redis-data:/data
-    networks:
-      - todo-app-net
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  # One-shot Atlas migration: applies migrations/versions/*.sql then exits. The
-  # app depends on its successful completion, so the API container can NEVER
-  # start against an un-migrated schema — even with a raw `docker compose up`.
   atlas:
     image: arigaio/atlas:latest
     container_name: todo-app-atlas
     command: >-
       migrate apply
-      --url postgres://${DB_USER:-todo}:${DB_PASSWORD:-todo}@postgres:5432/${DB_NAME:-todo}?sslmode=disable
+      --url postgres://todo:todopassword@floci-rds-todo-aurora:5432/todo?sslmode=disable
       --dir file://versions
     working_dir: /migrations
     volumes:
       - ./migrations:/migrations:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - todo-app-net
+    networks: [todo-app-net]
     restart: "no"
 
-  # floci — local AWS emulator (ECR, SSM, ...), dedicated to this app and
-  # INDEPENDENT of the local-gitops floci (which owns host :4566). We publish on
-  # host :4576 so both can run side by side. The app reaches it over the compose
-  # network as floci:4566; host tooling (`task floci:seed`, ecr:*) uses :4576 via
-  # the `floci` AWS CLI profile (test/test). Mounts the Docker socket to spawn
-  # backing helper containers on demand.
+  # Local AWS, independent of the local-gitops floci on host :4566.
   floci:
     image: floci/floci:latest
     container_name: todo-app-floci
@@ -111,17 +52,10 @@ services:
       - "4576:4566"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - todo-app-net
+    networks: [todo-app-net]
     restart: unless-stopped
 
 networks:
   todo-app-net:
     name: todo-app-net
     driver: bridge
-
-volumes:
-  todo-app-postgres-data:
-    name: todo-app-postgres-data
-  todo-app-redis-data:
-    name: todo-app-redis-data

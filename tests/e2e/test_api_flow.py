@@ -55,7 +55,7 @@ async def test_full_crud_flow(api_client, tenant_id):
     # list tasks
     r = await api_client.get("/api/v1/tasks", headers=h)
     assert r.status_code == 200
-    assert len(r.json()) == 1
+    assert len(r.json()["items"]) == 1
 
     # AI suggestion (stub LLM in debug)
     r = await api_client.post(

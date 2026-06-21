@@ -10,6 +10,7 @@ from todo_app.presentation.api.dependencies import (
     get_request_context,
     require_role,
 )
+from todo_app.presentation.api.pagination import PageResponse
 from todo_app.presentation.api.runtime import get_uow
 from todo_app.presentation.api.v1.users.serializers import (
     ChangeRoleRequest,
@@ -33,18 +34,18 @@ async def register_user(
     return UserResponse.from_output(result)
 
 
-@router.get("", response_model=list[UserResponse])
+@router.get("", response_model=PageResponse[UserResponse])
 async def list_users(
     limit: int = 50,
     offset: int = 0,
     ctx: RequestContext = Depends(get_request_context),
     container=Depends(get_container),
     uow=Depends(get_uow),
-) -> list[UserResponse]:
+) -> PageResponse[UserResponse]:
     query = container.users.list_users_query()
     async with uow.begin():
-        results = await query.execute(limit=limit, offset=offset)
-    return [UserResponse.from_output(r) for r in results]
+        page = await query.execute(limit=limit, offset=offset)
+    return PageResponse.from_page(page, UserResponse.from_output)
 
 
 @router.get("/{user_id}", response_model=UserResponse)

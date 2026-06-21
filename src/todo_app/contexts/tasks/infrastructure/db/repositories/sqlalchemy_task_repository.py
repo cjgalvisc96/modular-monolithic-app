@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from todo_app.contexts.shared.infrastructure.db.scoped_session import current_session
 from todo_app.contexts.tasks.domain.repositories.task_repository import TaskRepository
@@ -46,6 +46,17 @@ class SqlAlchemyTaskRepository(TaskRepository):
         stmt = stmt.order_by(TaskModel.created_at).limit(limit).offset(offset)
         models = (await session.execute(stmt)).scalars().all()
         return [TaskMapper.to_entity(m) for m in models]
+
+    async def count(
+        self, *, owner_id: OwnerId | None = None, status: TaskStatus | None = None
+    ) -> int:
+        session = current_session()
+        stmt = select(func.count()).select_from(TaskModel).where(TaskModel.deleted_at.is_(None))
+        if owner_id is not None:
+            stmt = stmt.where(TaskModel.owner_id == owner_id.value)
+        if status is not None:
+            stmt = stmt.where(TaskModel.status == status.value)
+        return int((await session.execute(stmt)).scalar_one())
 
     async def update(self, task: Task) -> None:
         session = current_session()

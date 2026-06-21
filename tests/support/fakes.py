@@ -59,6 +59,9 @@ class FakeUserRepository(UserRepository):
     async def list(self, *, limit: int = 50, offset: int = 0) -> list[User]:
         return list(self._store.values())[offset : offset + limit]
 
+    async def count(self) -> int:
+        return len(self._store)
+
     async def update(self, user: User) -> None:
         self._store[user.id.value] = user
 
@@ -88,6 +91,16 @@ class FakeTaskRepository(TaskRepository):
             items = [t for t in items if t.status is status]
         return items[offset : offset + limit]
 
+    async def count(
+        self, *, owner_id: OwnerId | None = None, status: TaskStatus | None = None
+    ) -> int:
+        items = list(self._store.values())
+        if owner_id is not None:
+            items = [t for t in items if t.owner_id.value == owner_id.value]
+        if status is not None:
+            items = [t for t in items if t.status is status]
+        return len(items)
+
     async def update(self, task: Task) -> None:
         self._store[task.id.value] = task
 
@@ -107,6 +120,9 @@ class FakeSuggestionRepository(SuggestionRepository):
 
     async def list(self, *, limit: int = 50, offset: int = 0) -> list[AiSuggestion]:
         return list(self._store.values())[offset : offset + limit]
+
+    async def count(self) -> int:
+        return len(self._store)
 
     async def update(self, suggestion: AiSuggestion) -> None:
         self._store[suggestion.id.value] = suggestion

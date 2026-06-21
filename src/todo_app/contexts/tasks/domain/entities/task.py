@@ -14,6 +14,7 @@ from todo_app.contexts.shared.domain.entities.aggregate import AggregateRoot
 from todo_app.contexts.shared.domain.exceptions import DomainValidationError
 from todo_app.contexts.shared.domain.value_objects.identifier import EntityId
 from todo_app.contexts.tasks.domain.events import TaskCompleted, TaskCreated
+from todo_app.contexts.tasks.domain.exceptions import EmptyTaskTitleError
 from todo_app.contexts.tasks.domain.value_objects.task_id import TaskId
 from todo_app.contexts.tasks.domain.value_objects.task_status import TaskStatus
 
@@ -40,7 +41,7 @@ class Task(AggregateRoot):
     def __post_init__(self) -> None:
         super().__init__()
         if not self.title.strip():
-            raise DomainValidationError("Task title must not be empty")
+            raise EmptyTaskTitleError()
         self.title = self.title.strip()
 
     @classmethod
@@ -92,7 +93,7 @@ class Task(AggregateRoot):
     ) -> None:
         if title is not None:
             if not title.strip():
-                raise DomainValidationError("Task title must not be empty")
+                raise EmptyTaskTitleError()
             self.title = title.strip()
         if description is not None:
             self.description = description

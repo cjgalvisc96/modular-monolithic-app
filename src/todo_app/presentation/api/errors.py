@@ -25,7 +25,10 @@ _STATUS_MAP = {
 
 def register_exception_handlers(app: FastAPI) -> None:
     async def _handle(request: Request, exc: Exception) -> JSONResponse:
-        code = _STATUS_MAP.get(type(exc), status.HTTP_400_BAD_REQUEST)
+        code = next(
+            (c for t, c in _STATUS_MAP.items() if isinstance(exc, t)),
+            status.HTTP_400_BAD_REQUEST,
+        )
         return JSONResponse(
             status_code=code,
             content={"error": type(exc).__name__, "detail": str(exc)},

@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from todo_app.contexts.shared.application.request_context import RequestContext
 from todo_app.presentation.api import tasks as background
 from todo_app.presentation.api.dependencies import get_container, get_request_context
+from todo_app.presentation.api.pagination import PageResponse
 from todo_app.presentation.api.runtime import get_uow
 from todo_app.presentation.api.v1.ai.serializers import (
     GenerateSuggestionRequest,
@@ -43,15 +44,15 @@ async def generate_suggestion(
     return SuggestionResponse.from_output(result)
 
 
-@router.get("/suggestions", response_model=list[SuggestionResponse])
+@router.get("/suggestions", response_model=PageResponse[SuggestionResponse])
 async def list_suggestions(
     limit: int = 50,
     offset: int = 0,
     ctx: RequestContext = Depends(get_request_context),
     container=Depends(get_container),
     uow=Depends(get_uow),
-) -> list[SuggestionResponse]:
+) -> PageResponse[SuggestionResponse]:
     query = container.ai.list_suggestions_query()
     async with uow.begin():
-        results = await query.execute(limit=limit, offset=offset)
-    return [SuggestionResponse.from_output(r) for r in results]
+        page = await query.execute(limit=limit, offset=offset)
+    return PageResponse.from_page(page, SuggestionResponse.from_output)

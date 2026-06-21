@@ -23,6 +23,7 @@ dependencies = [
 
 [project.scripts]
 todo-cli = "todo_app.presentation.cli.main:app"
+todo-api = "todo_app.presentation.api.main:main"
 
 [dependency-groups]
 dev = [
