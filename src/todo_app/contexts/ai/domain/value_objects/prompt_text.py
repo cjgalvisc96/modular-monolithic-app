@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 from todo_app.contexts.ai.domain.exceptions import InvalidPromptError

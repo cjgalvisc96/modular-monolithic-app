@@ -1,7 +1,5 @@
 """ASGI entrypoint for the HTTP API."""
 
-from __future__ import annotations
-
 from todo_app.core.config import get_settings
 from todo_app.core.di.container import build_container
 from todo_app.core.logging import configure_logging

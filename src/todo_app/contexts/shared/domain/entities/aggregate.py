@@ -1,7 +1,5 @@
 """Aggregate root base — pure Python, no ORM, no framework."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

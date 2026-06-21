@@ -1,7 +1,5 @@
 """Event publisher port — the domain depends on this interface, not an impl."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:

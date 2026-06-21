@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from todo_app.contexts.tasks.application.dto.task_dto import TaskOutput, UpdateTaskInput

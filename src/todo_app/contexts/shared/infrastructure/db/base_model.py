@@ -1,7 +1,5 @@
 """Shared SQLAlchemy declarative base for tenant-owned tables."""
 
-from __future__ import annotations
-
 import uuid
 from datetime import datetime
 

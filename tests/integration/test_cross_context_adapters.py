@@ -1,7 +1,5 @@
 """Exercises the real cross-context adapters against the DB-backed repositories."""
 
-from __future__ import annotations
-
 from uuid import uuid4
 
 import pytest

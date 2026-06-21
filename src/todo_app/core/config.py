@@ -1,7 +1,5 @@
 """Application settings (Pydantic BaseSettings), sourced from .env / environment."""
 
-from __future__ import annotations
-
 from functools import cached_property
 
 from pydantic_settings import BaseSettings, SettingsConfigDict

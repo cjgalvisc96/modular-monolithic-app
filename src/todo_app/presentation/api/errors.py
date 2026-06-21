@@ -1,7 +1,5 @@
 """Maps domain exceptions to HTTP responses at the transport boundary."""
 
-from __future__ import annotations
-
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 

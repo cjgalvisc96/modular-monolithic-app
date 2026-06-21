@@ -1,7 +1,5 @@
 """Deterministic local LLM stub for DEBUG runs without Bedrock credentials."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from todo_app.contexts.ai.domain.ports.llm_client import LlmClient, LlmCompletion

@@ -1,7 +1,5 @@
 """Tasks-context domain exceptions."""
 
-from __future__ import annotations
-
 from todo_app.contexts.shared.domain.exceptions import (
     DomainValidationError,
     EntityNotFoundError,

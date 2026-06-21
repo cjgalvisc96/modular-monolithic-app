@@ -1,7 +1,5 @@
 """AWS Cognito JWT verification — the single source of truth for authentication."""
 
-from __future__ import annotations
-
 import time
 from dataclasses import dataclass, field
 from uuid import UUID

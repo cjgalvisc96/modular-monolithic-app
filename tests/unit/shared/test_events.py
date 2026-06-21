@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from todo_app.contexts.shared.domain.entities.aggregate import AggregateRoot
 from todo_app.contexts.shared.domain.events.base import DomainEvent
 

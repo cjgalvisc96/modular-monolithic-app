@@ -1,7 +1,5 @@
 """UsersContainer — wires the users context's use cases, repository, and Cognito."""
 
-from __future__ import annotations
-
 from dependency_injector import containers, providers
 
 from todo_app.contexts.users.application.commands.change_user_role import (

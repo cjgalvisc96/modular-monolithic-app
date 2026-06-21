@@ -4,8 +4,6 @@ Asserts layer direction (domain ← application ← infrastructure), bounded-con
 isolation, domain framework-purity, and the presentation→infrastructure ban.
 """
 
-from __future__ import annotations
-
 import subprocess
 import sys
 

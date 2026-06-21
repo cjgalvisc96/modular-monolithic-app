@@ -1,7 +1,5 @@
 """Prometheus metrics — a scrape endpoint for the platform's collector."""
 
-from __future__ import annotations
-
 import time
 
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest

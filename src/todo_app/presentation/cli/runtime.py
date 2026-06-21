@@ -1,7 +1,5 @@
 """CLI runtime helpers — share the same ApplicationContainer and use cases as the API."""
 
-from __future__ import annotations
-
 import asyncio
 from typing import TYPE_CHECKING
 

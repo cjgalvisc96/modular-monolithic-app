@@ -1,7 +1,5 @@
 """SharedContainer — composition root; the only place allowed to wire all three layers."""
 
-from __future__ import annotations
-
 from dependency_injector import containers, providers
 from redis.asyncio import Redis
 

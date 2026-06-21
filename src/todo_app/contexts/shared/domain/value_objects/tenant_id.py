@@ -1,7 +1,5 @@
 """Tenant identity — the value carried from a Cognito claim down to RLS."""
 
-from __future__ import annotations
-
 from todo_app.contexts.shared.domain.value_objects.identifier import EntityId
 
 

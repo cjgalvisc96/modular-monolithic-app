@@ -3,7 +3,7 @@ name = "todo-app"
 version = "0.1.0"
 description = "Modular-monolith TODO service (DDD, multi-tenant, AWS Cognito + Bedrock)"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 authors = [{ name = "Cristian Galvis", email = "cjgalvisc@unal.edu.co" }]
 dependencies = [
     "fastapi>=0.111",
@@ -71,7 +71,7 @@ packages = ["src/todo_app"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
@@ -115,7 +115,7 @@ exclude_lines = ["pragma: no cover", "raise NotImplementedError", "if TYPE_CHECK
 
 [tool.pyright]
 include = ["src"]
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 typeCheckingMode = "standard"
 reportMissingImports = true
 

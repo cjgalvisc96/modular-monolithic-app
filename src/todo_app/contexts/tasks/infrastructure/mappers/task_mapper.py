@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from todo_app.contexts.shared.domain.value_objects.tenant_id import TenantId
 from todo_app.contexts.tasks.domain.entities.task import OwnerId, Task
 from todo_app.contexts.tasks.domain.value_objects.task_id import TaskId

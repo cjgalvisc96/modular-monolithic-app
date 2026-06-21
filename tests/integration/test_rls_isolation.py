@@ -12,8 +12,6 @@ Requires a real PostgreSQL (RLS is a no-op on SQLite), so it is skipped unless
 ``TEST_DATABASE_URL=postgresql://todo:todo@localhost:5433/todo``.
 """
 
-from __future__ import annotations
-
 import os
 from uuid import uuid4
 

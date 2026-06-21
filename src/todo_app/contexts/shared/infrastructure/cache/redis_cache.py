@@ -1,7 +1,5 @@
 """Namespace-aware Redis cache wrapper (keys stored as ``<namespace>:<key>``)."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

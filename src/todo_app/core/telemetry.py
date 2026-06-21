@@ -1,8 +1,6 @@
 # pyright: reportMissingImports=false
 """OpenTelemetry wiring (no-op unless OTEL_ENABLE is set)."""
 
-from __future__ import annotations
-
 import logging
 
 logger = logging.getLogger("todo_app.telemetry")

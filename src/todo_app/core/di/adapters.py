@@ -1,7 +1,5 @@
 """Cross-context adapters wired at the composition root, keeping contexts isolated."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from todo_app.contexts.ai.application.ports.task_read_port import TaskBrief, TaskReadPort

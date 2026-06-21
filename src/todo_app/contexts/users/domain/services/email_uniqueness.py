@@ -1,7 +1,5 @@
 """Email uniqueness spans the whole User set, so it is a domain service, not an entity rule."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from todo_app.contexts.users.domain.exceptions import EmailAlreadyRegisteredError

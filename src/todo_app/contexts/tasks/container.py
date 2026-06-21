@@ -1,7 +1,5 @@
 """Wires the tasks context; cross-layer imports are confined here."""
 
-from __future__ import annotations
-
 from dependency_injector import containers, providers
 
 from todo_app.contexts.tasks.application.commands.complete_task import CompleteTaskCommand

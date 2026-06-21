@@ -1,7 +1,5 @@
 """Unit tests for shared infrastructure primitives (with fakes — no real I/O)."""
 
-from __future__ import annotations
-
 from contextlib import asynccontextmanager
 from uuid import uuid4
 

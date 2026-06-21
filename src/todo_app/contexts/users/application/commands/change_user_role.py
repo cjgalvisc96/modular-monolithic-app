@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from todo_app.contexts.users.application.dto.user_dto import UserOutput

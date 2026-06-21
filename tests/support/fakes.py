@@ -3,8 +3,6 @@
 Unit tests for the application layer use these — no DB, no AWS, no FastAPI.
 """
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from todo_app.contexts.ai.application.ports.task_read_port import TaskBrief, TaskReadPort

@@ -1,7 +1,5 @@
 """Bedrock adapter implementing LlmClient — the ONLY module aware the LLM is AWS Bedrock."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 from typing import TYPE_CHECKING

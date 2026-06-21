@@ -1,7 +1,5 @@
 """Covers the builder lifespan and the degraded-health (dependency error) path."""
 
-from __future__ import annotations
-
 import pytest
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient

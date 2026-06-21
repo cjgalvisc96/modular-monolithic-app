@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from fastapi import APIRouter, BackgroundTasks, Depends
 
 from todo_app.contexts.shared.application.request_context import RequestContext

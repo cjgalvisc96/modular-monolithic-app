@@ -1,7 +1,5 @@
 """Request-context middleware: correlation id + logging (tenant binding is in the dependency)."""
 
-from __future__ import annotations
-
 import logging
 import time
 from typing import TYPE_CHECKING

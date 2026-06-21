@@ -5,8 +5,6 @@ run against a real (if simpler) database. RLS is NOT exercised here — the
 dedicated RLS isolation test runs against PostgreSQL.
 """
 
-from __future__ import annotations
-
 from todo_app.contexts.shared.infrastructure.db.registry import metadata
 from todo_app.core.config import Settings
 from todo_app.core.di.container import ApplicationContainer

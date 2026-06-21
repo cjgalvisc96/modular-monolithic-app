@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from todo_app.contexts.ai.domain.entities.ai_suggestion import (

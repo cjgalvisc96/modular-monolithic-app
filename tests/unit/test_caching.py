@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pydantic import BaseModel
 
 from todo_app.presentation.api.caching import cached

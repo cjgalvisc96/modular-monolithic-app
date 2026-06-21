@@ -1,7 +1,5 @@
 """Typer CLI entrypoint for operational/admin commands."""
 
-from __future__ import annotations
-
 import typer
 
 from todo_app.presentation.cli.commands import ai, tasks, users

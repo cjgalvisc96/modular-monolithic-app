@@ -1,7 +1,5 @@
 """Async SQLAlchemy session factory (asyncpg + SQLAlchemy 2.0)."""
 
-from __future__ import annotations
-
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 

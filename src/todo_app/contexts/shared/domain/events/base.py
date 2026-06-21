@@ -1,7 +1,5 @@
 """Base class for cross-context domain events."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from uuid import UUID, uuid4

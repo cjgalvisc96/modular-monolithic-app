@@ -1,7 +1,5 @@
 """Covers the remaining API surface: reads, updates, auth edge cases, errors."""
 
-from __future__ import annotations
-
 from uuid import uuid4
 
 import pytest

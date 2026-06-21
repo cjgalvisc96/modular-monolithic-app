@@ -1,7 +1,5 @@
 """Request-scoped current session holder (contextvar set/reset by the Unit of Work)."""
 
-from __future__ import annotations
-
 from contextvars import ContextVar
 from typing import TYPE_CHECKING
 

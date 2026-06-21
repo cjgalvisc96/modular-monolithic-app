@@ -1,7 +1,5 @@
 """GenerateTaskSuggestion use case."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from todo_app.contexts.ai.application.dto.suggestion_dto import (

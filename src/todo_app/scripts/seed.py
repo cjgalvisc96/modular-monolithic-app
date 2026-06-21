@@ -5,8 +5,6 @@ CreateTaskCommand / CompleteTaskCommand) — it is an entrypoint, not business
 logic. Idempotent: re-running a populated DB is a no-op.
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
 from datetime import date

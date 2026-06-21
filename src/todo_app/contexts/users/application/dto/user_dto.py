@@ -1,7 +1,5 @@
 """Application-boundary DTOs for the users context, distinct from API serializers."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 

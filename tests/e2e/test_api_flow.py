@@ -4,8 +4,6 @@ Uses the DEBUG dev-auth header bypass (no Cognito) and the SQLite-backed test
 container. RLS is not exercised here (SQLite); see the RLS isolation test.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from tests.conftest import dev_headers

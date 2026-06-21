@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from enum import StrEnum
 
 from todo_app.contexts.shared.domain.exceptions import DomainValidationError

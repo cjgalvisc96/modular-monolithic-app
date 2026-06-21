@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from todo_app.contexts.shared.domain.value_objects.tenant_id import TenantId

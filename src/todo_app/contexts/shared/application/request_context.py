@@ -1,7 +1,5 @@
 """Request-scoped identity/tenant context (contextvar, async-safe)."""
 
-from __future__ import annotations
-
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field

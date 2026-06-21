@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from todo_app.contexts.ai.domain.entities.ai_suggestion import (
     AiSuggestion,
     SuggestionStatus,

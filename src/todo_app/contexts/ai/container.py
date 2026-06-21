@@ -1,7 +1,5 @@
 """Wires the ai context; receives a read-only task lookup port from the root (ai → tasks)."""
 
-from __future__ import annotations
-
 from dependency_injector import containers, providers
 
 from todo_app.contexts.ai.application.commands.generate_task_suggestion import (

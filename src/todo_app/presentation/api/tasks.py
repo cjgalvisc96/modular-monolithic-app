@@ -1,7 +1,5 @@
 """FastAPI background-task definitions; each runs in its own tenant-scoped Unit of Work."""
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING
 

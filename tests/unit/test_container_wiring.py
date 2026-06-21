@@ -1,8 +1,6 @@
 """Asserts the root ApplicationContainer wires every provider, including the
 cross-context bindings (tasks→users, ai→tasks)."""
 
-from __future__ import annotations
-
 from todo_app.contexts.ai.application.commands.generate_task_suggestion import (
     GenerateTaskSuggestionCommand,
 )

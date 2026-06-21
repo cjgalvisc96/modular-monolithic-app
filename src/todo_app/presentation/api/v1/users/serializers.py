@@ -1,7 +1,5 @@
 """HTTP serializers for the users context; map to/from application DTOs, never DB models."""
 
-from __future__ import annotations
-
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field

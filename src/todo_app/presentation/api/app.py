@@ -1,7 +1,5 @@
 """FastAPI application assembled via a Builder."""
 
-from __future__ import annotations
-
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING
 

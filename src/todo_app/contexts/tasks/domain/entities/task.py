@@ -1,7 +1,5 @@
 """Task aggregate root; the owner is an opaque id, not a `User` entity, to preserve isolation."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 

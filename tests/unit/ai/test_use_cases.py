@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from tests.support.fakes import FakeLlmClient, FakeSuggestionRepository, FakeTaskRead

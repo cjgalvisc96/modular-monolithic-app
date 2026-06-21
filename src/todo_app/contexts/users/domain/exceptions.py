@@ -1,7 +1,5 @@
 """Users-context domain exceptions (subclass the shared kernel base types)."""
 
-from __future__ import annotations
-
 from todo_app.contexts.shared.domain.exceptions import (
     ConflictError,
     EntityNotFoundError,

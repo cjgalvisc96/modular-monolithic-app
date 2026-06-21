@@ -1,7 +1,5 @@
 """Framework-agnostic domain exceptions shared across all bounded contexts."""
 
-from __future__ import annotations
-
 
 class DomainError(Exception):
     pass

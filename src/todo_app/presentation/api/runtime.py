@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from fastapi import Depends, Request
 
 from todo_app.contexts.shared.infrastructure.db.unit_of_work import UnitOfWork

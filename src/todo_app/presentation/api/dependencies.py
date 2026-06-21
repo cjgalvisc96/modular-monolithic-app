@@ -1,7 +1,5 @@
 """API authentication, authorization, and tenant resolution."""
 
-from __future__ import annotations
-
 from collections.abc import AsyncIterator, Callable
 from uuid import UUID, uuid4
 

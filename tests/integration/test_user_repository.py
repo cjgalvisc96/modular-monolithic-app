@@ -1,7 +1,5 @@
 """Repository integration tests against a real (SQLite) database via the UoW."""
 
-from __future__ import annotations
-
 import pytest
 
 from todo_app.contexts.shared.domain.value_objects.email import Email

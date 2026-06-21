@@ -1,7 +1,5 @@
 """Entity ↔ ORM model mapping. The only place that knows both shapes."""
 
-from __future__ import annotations
-
 from todo_app.contexts.shared.domain.value_objects.email import Email
 from todo_app.contexts.shared.domain.value_objects.tenant_id import TenantId
 from todo_app.contexts.users.domain.entities.user import User

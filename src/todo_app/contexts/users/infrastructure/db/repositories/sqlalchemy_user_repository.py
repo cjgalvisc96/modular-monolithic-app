@@ -1,7 +1,5 @@
 """Tenant scoping is enforced by RLS; the WHERE on tenant_id is defense-in-depth only."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select

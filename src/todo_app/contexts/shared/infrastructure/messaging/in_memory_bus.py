@@ -1,7 +1,5 @@
 """In-memory event publisher implementing the EventPublisher port (local default)."""
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Awaitable, Callable
 
