@@ -13,6 +13,12 @@ services:
     environment:
       DB_HOST: postgres
       REDIS_HOST: redis
+      # Point the AWS SDK (boto3/Bedrock) at floci, the local AWS emulator.
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
     ports:
       - "8000:8000"
     volumes:
@@ -23,6 +29,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      floci:
+        condition: service_started
     networks:
       - todo-app-net
     healthcheck:
@@ -66,6 +74,23 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # floci — local AWS emulator (ECR, SSM, ...), dedicated to this app and
+  # INDEPENDENT of the local-gitops floci (which owns host :4566). We publish on
+  # host :4576 so both can run side by side. The app reaches it over the compose
+  # network as floci:4566; host tooling (`task floci:seed`, ecr:*) uses :4576 via
+  # the `floci` AWS CLI profile (test/test). Mounts the Docker socket to spawn
+  # backing helper containers on demand.
+  floci:
+    image: floci/floci:latest
+    container_name: todo-app-floci
+    ports:
+      - "4576:4566"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - todo-app-net
+    restart: unless-stopped
 
 networks:
   todo-app-net:

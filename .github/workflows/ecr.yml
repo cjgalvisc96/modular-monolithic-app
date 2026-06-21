@@ -1,0 +1,63 @@
+name: ECR
+
+# Build the production image and publish it to Amazon ECR, then pull it back to
+# verify the push. Runs only when an OIDC role (AWS_ROLE_ARN) is configured;
+# otherwise it self-skips so forks without cloud creds stay green.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "src/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/ecr.yml"
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag to publish (defaults to the commit SHA)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  id-token: write        # OIDC for AWS auth
+
+concurrency:
+  group: ecr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-push:
+    name: Build → Push → Pull
+    runs-on: ubuntu-latest
+    env:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ECR_REPO: ${{ vars.ECR_REPO || 'todo-app' }}
+      IMAGE_TAG: ${{ github.event.inputs.image_tag || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ env.AWS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build, push and pull (task ecr:push + ecr:pull)
+        if: ${{ env.AWS_ROLE_ARN != '' }}
+        run: |
+          task ecr:push ECR_REPO=${{ env.ECR_REPO }} IMAGE_TAG=${{ env.IMAGE_TAG }} AWS_REGION=${{ env.AWS_REGION }}
+          task ecr:pull ECR_REPO=${{ env.ECR_REPO }} IMAGE_TAG=${{ env.IMAGE_TAG }} AWS_REGION=${{ env.AWS_REGION }}
+
+      - name: Skipped notice
+        if: ${{ env.AWS_ROLE_ARN == '' }}
+        run: echo "AWS_ROLE_ARN not set — skipping ECR publish (configure an OIDC role to enable)."
