@@ -386,11 +386,12 @@ tasks:
         done
 
   # --- docker ---------------------------------------------------------------
-  # Ordered startup mirrors the real pipeline: floci → setup (seed) → app.
-  # floci and its provisioning must complete BEFORE the app boots, so the app
-  # service is brought up last (not together with floci).
-  docker:up:
-    desc: 'Ordered local stack: floci → setup (seed ECR/SSM) → app + Postgres + Redis'
+  # Ordered bring-up mirrors the real pipeline: floci → setup (terraform/seed) →
+  # app. floci and its provisioning must complete BEFORE the app boots, so the
+  # app service is started last (not together with floci). Internal so both
+  # docker:up (streams logs) and docker:test (smoke-checks) can reuse it.
+  docker:_bringup:
+    internal: true
     deps: [deps:check]
     cmds:
       # 1. floci first (plus the data services the app needs), wait until healthy.
@@ -410,7 +411,12 @@ tasks:
         fi
       # 3. app last, now that floci is provisioned.
       - "{{.COMPOSE}} up -d --build --wait app"
-      # 4. stream the API logs (Ctrl+C to detach; containers keep running).
+
+  docker:up:
+    desc: 'Ordered local stack: floci → setup (terraform ENV=local) → app, then stream API logs'
+    cmds:
+      - task: docker:_bringup
+      # Stream the API logs (Ctrl+C to detach; containers keep running detached).
       - "{{.COMPOSE}} logs -f app"
 
   docker:down:
@@ -458,7 +464,7 @@ tasks:
         echo "Stack is healthy."
 
   docker:test:
-    desc: Full local stack test — bring up app + Postgres + Redis + floci, then smoke-check
+    desc: Full local stack test — bring up floci → terraform → app, then smoke-check
     cmds:
-      - task: docker:up
+      - task: docker:_bringup
       - task: docker:smoke
