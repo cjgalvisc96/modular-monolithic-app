@@ -45,3 +45,7 @@ typed, well-tested code that passes the quality and architecture gates without l
   and takes dependencies via constructor injection; `infrastructure/` implements the ports.
 - New `ai` work goes through the `LlmClient` port, never `boto3` outside the Bedrock adapter.
 - ruff line length 100, type hints, no dead code (vulture), tests for happy/edge/error paths.
+- Context-specific errors live in each context's `domain/exceptions.py` (subclassing the shared
+  kernel); presentation maps them to HTTP status by `isinstance`.
+- Structured logging via `core/logging.py::get_logger` (JSON), constructor-injected into the use
+  cases that emit audit events.

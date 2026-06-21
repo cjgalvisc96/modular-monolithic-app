@@ -43,5 +43,10 @@ CI — all under least-privilege IAM via IRSA, with infra tested like applicatio
 - One IRSA role per workload; the AI pod role is limited to `bedrock:InvokeModel` on specific model
   ARNs; the DB-init Job role has DDL + secret read only, no runtime data access.
 - DB init is a separate Kubernetes Job, run via Helm hook, completing before API readiness.
-- Multi-cluster topology: `dev`/`prod` clusters, `dev-app`/`prod-app` namespaces, per-namespace
+- Multi-cluster topology: `dev`/`prod` clusters, the `todo-app` namespace per env, per-namespace
   RBAC; Terragrunt keeps env composition DRY.
+- Local stack mirrors the cloud via **floci** (local AWS): Postgres → Aurora (RDS), Redis →
+  ElastiCache, plus ECR + SSM, all provisioned by Terraform (`infra/terraform/local`, `ENV=local`).
+- Schema migration (Atlas) and demo-data seeding (`todo_app/scripts/seed.py`) run as one-shot
+  **init containers** that complete before the API starts — the same "DB init decoupled from API
+  startup" rule as the Helm Job. App entrypoints: `todo-api`, `todo-seed`, `todo-cli`.

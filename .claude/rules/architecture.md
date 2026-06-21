@@ -43,9 +43,9 @@ sits as a **sibling** to `domain/`, `application/`, and `infrastructure/` — ne
 
 ## Tenancy is RLS, not app-layer filtering
 
-- Tenant context flows: Cognito `tenant_id` claim → tenant-binding middleware →
-  `SET LOCAL app.tenant_id` (`shared/infrastructure/db/tenant_context.py`) → PostgreSQL RLS policies
-  (`migrations/policies/*.sql`).
+- Tenant context flows: Cognito `tenant_id` claim → the `get_request_context` dependency (binds a
+  request contextvar) → the Unit of Work issues `set_config('app.tenant_id', …, local)`
+  (`shared/infrastructure/db/tenant_context.py`) → PostgreSQL RLS policies (`migrations/policies/*.sql`).
 - **RLS is the enforcement boundary.** Application-layer `WHERE tenant_id` is defense-in-depth, not
   the source of truth. Never replace RLS with app-layer filtering.
 

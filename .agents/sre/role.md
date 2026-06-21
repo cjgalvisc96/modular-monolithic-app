@@ -15,6 +15,8 @@ stack, and the operational posture that keeps the service healthy and debuggable
 - Define SLOs and alerting on the golden signals; own on-call runbooks and incident response.
 - Watch reliability risks: DB connection pool saturation, RLS-driven fail-closed behavior (a missing
   `app.tenant_id` yields zero rows), cache health, and Bedrock latency/error budgets.
+- Logs are structured JSON (`core/logging.py`): one object per line carrying request id, tenant,
+  method/path/status/latency — ready for a log pipeline alongside the OTel traces.
 
 ## Inputs
 

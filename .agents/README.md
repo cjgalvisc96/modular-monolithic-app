@@ -42,8 +42,8 @@ in the repository's `plan.md`, `project-structure.md`, and `todo-app-architectur
   cross-context access is via explicit ports wired at the root `ApplicationContainer`.
 - **Presentation purity**: `api/` and `cli/` call `application/` use cases only; serializers depend
   on entities, not DB models.
-- **Tenancy boundary**: Cognito `tenant_id` claim → `SET LOCAL app.tenant_id` → PostgreSQL RLS. RLS
-  is the enforcement boundary, not app-layer filtering.
+- **Tenancy boundary**: Cognito `tenant_id` claim → `set_config('app.tenant_id', …, local)` → PostgreSQL
+  RLS. RLS is the enforcement boundary, not app-layer filtering.
 - **IAM**: one least-privilege IRSA role per workload.
 - **Design discipline**: SOLID, DRY, KISS, YAGNI; overengineering is a defect.
 

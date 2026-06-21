@@ -20,6 +20,20 @@ Follow `.claude/rules/architecture.md` and `.claude/rules/coding-style.md`.
 
 This read/write separation is CQRS-style — keep them in their respective folders.
 
+## Read-side patterns
+
+- **List queries return a `Page[T]`** (`shared/application/page.py`) — `{items, total, limit,
+  offset}`; the repository exposes `count(...)` next to `list(...)`, and the router serializes via
+  `PageResponse[T].from_page(...)`.
+- **GET-by-id routes cache** through `presentation/api/caching.py::cached(...)` (tenant-scoped Redis
+  key, TTL), invalidated on the matching writes.
+- The API is rate-limited by `presentation/api/middleware/rate_limit.py` (Redis fixed window).
+
+## One-shot ops jobs are not CLI commands
+
+Data seeding and similar init jobs live in `todo_app/scripts/` as standalone entrypoints run as
+init containers before the API — they still drive **use cases only**, never repositories/entities.
+
 ## Steps
 
 ### 1. Define the DTOs
@@ -61,8 +75,9 @@ ports. If it uses a cross-context port, ensure that port is passed in from the r
 - **API**: add a route in `presentation/api/v1/<context>/routers.py`; resolve the use case from the
   container and call it. Map input/output via `serializers.py` (entity-based, **not** DB models).
   No business logic in the router.
-- **CLI** (if operational): add a command in `presentation/cli/commands/<context>.py` that invokes
-  the **same** use case class. API and CLI must not duplicate logic.
+- **CLI** (if interactive/admin): add a command in `presentation/cli/commands/<context>.py` that
+  invokes the **same** use case class. API and CLI must not duplicate logic. (One-shot jobs go in
+  `scripts/` instead — see above.)
 
 ### 6. Tests
 
