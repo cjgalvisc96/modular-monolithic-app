@@ -24,6 +24,7 @@ dependencies = [
 [project.scripts]
 todo-cli = "todo_app.presentation.cli.main:app"
 todo-api = "todo_app.presentation.api.main:main"
+todo-seed = "todo_app.scripts.seed:main"
 
 [dependency-groups]
 dev = [
@@ -101,6 +102,7 @@ omit = [
     "*/presentation/cli/*",   # exercised via CLI smoke, not coverage
     "*/core/telemetry.py",     # optional OTel wiring, needs collector
     "*/main.py",               # ASGI bootstrap entrypoint
+    "*/scripts/*",             # one-shot ops entrypoints (seeder init container)
 ]
 
 [tool.coverage.report]

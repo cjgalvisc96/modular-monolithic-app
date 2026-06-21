@@ -448,6 +448,12 @@ tasks:
     cmds:
       - docker run --rm -v "$PWD/migrations:/work" -w /work {{.ATLAS_IMAGE}} migrate hash --dir file://versions
 
+  # --- seed -----------------------------------------------------------------
+  seed:demo:
+    desc: 'Run the demo-data seeder init container against the running stack (idempotent)'
+    cmds:
+      - "{{.COMPOSE}} run --rm seed"
+
   # --- docker ---------------------------------------------------------------
   docker:_bringup:
     internal: true

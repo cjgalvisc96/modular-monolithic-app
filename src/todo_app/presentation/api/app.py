@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from todo_app.core.config import Settings, get_settings
 from todo_app.core.di.container import ApplicationContainer, build_container
 from todo_app.presentation.api.errors import register_exception_handlers
+from todo_app.presentation.api.middleware.rate_limit import RateLimitMiddleware
 from todo_app.presentation.api.middleware.tenant_middleware import RequestContextMiddleware
 from todo_app.presentation.api.v1.ai.routers import router as ai_router
 from todo_app.presentation.api.v1.tasks.routers import router as tasks_router
@@ -57,6 +58,12 @@ class ApiBuilder:
 
     def _configure_middleware(self, app: FastAPI) -> None:
         app.add_middleware(RequestContextMiddleware)
+        app.add_middleware(
+            RateLimitMiddleware,
+            limit=self._settings.rate_limit_requests,
+            window=self._settings.rate_limit_window_seconds,
+            enabled=self._settings.rate_limit_enabled,
+        )
         app.add_middleware(
             CORSMiddleware,
             allow_origins=self._settings.cors_origin_list,

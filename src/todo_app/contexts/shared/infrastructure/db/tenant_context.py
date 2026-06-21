@@ -1,9 +1,4 @@
-"""Binds the request's tenant to the DB transaction for RLS enforcement.
-
-Issues ``SET LOCAL app.tenant_id = '<uuid>'`` so PostgreSQL RLS policies can
-compare each row's ``tenant_id`` against ``current_setting('app.tenant_id')``.
-This is the enforcement seam — app-layer filtering is only defense-in-depth.
-"""
+"""Bind the request tenant to the DB transaction for RLS (the enforcement seam)."""
 
 from __future__ import annotations
 
@@ -18,13 +13,11 @@ if TYPE_CHECKING:
 
 
 async def bind_tenant(session: AsyncSession, tenant_id: UUID) -> None:
-    """Set the tenant for the current transaction (must run inside a tx).
-
-    ``SET LOCAL`` is transaction-scoped, so it resets automatically at commit/
-    rollback — no cross-request leakage. Parameter binding guards against
-    injection via the bound value.
-    """
-    await session.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": str(tenant_id)})
+    # set_config(..., is_local=true) is transaction-scoped like SET LOCAL but
+    # accepts a bound parameter (SET LOCAL does not).
+    await session.execute(
+        text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": str(tenant_id)}
+    )
 
 
 def is_postgres(session: AsyncSession) -> bool:

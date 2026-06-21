@@ -23,6 +23,8 @@ services:
         condition: service_started
       atlas:
         condition: service_completed_successfully
+      seed:
+        condition: service_completed_successfully
     networks: [todo-app-net]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
@@ -41,6 +43,23 @@ services:
     working_dir: /migrations
     volumes:
       - ./migrations:/migrations:ro
+    networks: [todo-app-net]
+    restart: "no"
+
+  # One-shot demo-data seeder (init container): after migration, before the API,
+  # via the app's use cases. Idempotent.
+  seed:
+    image: local/todo-app:dev
+    container_name: todo-app-seed
+    command: ["todo-seed"]
+    env_file: .env
+    volumes:
+      - ./docker/mock-data:/app/docker/mock-data:ro
+    depends_on:
+      atlas:
+        condition: service_completed_successfully
+      floci:
+        condition: service_started
     networks: [todo-app-net]
     restart: "no"
 

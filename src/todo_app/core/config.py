@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     redis_db: int = 0
     redis_password: str = ""
 
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 100
+    rate_limit_window_seconds: int = 60
+
     # AWS / Cognito / Bedrock
     aws_region: str = "us-east-1"
     cognito_user_pool_id: str = ""

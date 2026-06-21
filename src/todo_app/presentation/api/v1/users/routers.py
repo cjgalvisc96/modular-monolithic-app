@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 
 from todo_app.contexts.shared.application.request_context import RequestContext
+from todo_app.presentation.api.caching import cached
 from todo_app.presentation.api.dependencies import (
     get_container,
     get_request_context,
@@ -55,10 +56,13 @@ async def get_user(
     container=Depends(get_container),
     uow=Depends(get_uow),
 ) -> UserResponse:
-    query = container.users.get_user_query()
-    async with uow.begin():
-        result = await query.execute(user_id)
-    return UserResponse.from_output(result)
+    async def produce() -> UserResponse:
+        query = container.users.get_user_query()
+        async with uow.begin():
+            return UserResponse.from_output(await query.execute(user_id))
+
+    cache = container.shared.cache()
+    return await cached(cache, "users", f"{ctx.tenant_id}:{user_id}", UserResponse, produce)
 
 
 @router.patch("/{user_id}/role", response_model=UserResponse)
@@ -72,4 +76,5 @@ async def change_role(
     command = container.users.change_user_role_command()
     async with uow.begin():
         result = await command.execute(user_id, payload.role)
+    await container.shared.cache().invalidate("users", f"{ctx.tenant_id}:{user_id}")
     return UserResponse.from_output(result)

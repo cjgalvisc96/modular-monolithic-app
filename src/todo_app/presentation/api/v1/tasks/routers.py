@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 
 from todo_app.contexts.shared.application.request_context import RequestContext
+from todo_app.presentation.api.caching import cached
 from todo_app.presentation.api.dependencies import get_container, get_request_context
 from todo_app.presentation.api.pagination import PageResponse
 from todo_app.presentation.api.runtime import get_uow
@@ -55,10 +56,13 @@ async def get_task(
     container=Depends(get_container),
     uow=Depends(get_uow),
 ) -> TaskResponse:
-    query = container.tasks.get_task_query()
-    async with uow.begin():
-        result = await query.execute(task_id)
-    return TaskResponse.from_output(result)
+    async def produce() -> TaskResponse:
+        query = container.tasks.get_task_query()
+        async with uow.begin():
+            return TaskResponse.from_output(await query.execute(task_id))
+
+    cache = container.shared.cache()
+    return await cached(cache, "tasks", f"{ctx.tenant_id}:{task_id}", TaskResponse, produce)
 
 
 @router.patch("/{task_id}", response_model=TaskResponse)
@@ -72,6 +76,7 @@ async def update_task(
     command = container.tasks.update_task_command()
     async with uow.begin():
         result = await command.execute(task_id, payload.to_input())
+    await container.shared.cache().invalidate("tasks", f"{ctx.tenant_id}:{task_id}")
     return TaskResponse.from_output(result)
 
 
@@ -85,4 +90,5 @@ async def complete_task(
     command = container.tasks.complete_task_command()
     async with uow.begin():
         result = await command.execute(task_id)
+    await container.shared.cache().invalidate("tasks", f"{ctx.tenant_id}:{task_id}")
     return TaskResponse.from_output(result)
