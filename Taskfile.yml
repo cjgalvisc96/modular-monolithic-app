@@ -462,16 +462,18 @@ tasks:
       - "{{.COMPOSE}} up -d --build --wait app"
 
   docker:up:
-    desc: 'Ordered local stack: floci → setup (terraform ENV=local) → app, then stream API logs'
+    desc: 'Clean caches, then ordered local stack: floci → setup (terraform ENV=local) → app, then stream API logs'
     cmds:
+      - task: clean:cache
       - task: docker:_bringup
       # Stream the API logs (Ctrl+C to detach; containers keep running detached).
       - "{{.COMPOSE}} logs -f app"
 
   docker:down:
-    desc: Stop and remove containers
+    desc: Stop and remove containers, then clean caches
     cmds:
       - "{{.COMPOSE}} down"
+      - task: clean:cache
 
   docker:prune:
     desc: Remove ALL todo-app docker resources — containers, images, volumes, networks (keeps local-gitops)
@@ -484,13 +486,15 @@ tasks:
         set -e
         ids=$(docker ps -aq --filter "name=todo-app" 2>/dev/null || true)
         [ -n "$ids" ]  && { docker rm -f $ids >/dev/null;        echo "containers removed: $(echo $ids | wc -w)"; }  || true
-        imgs=$(docker images --format '{{"{{"}}.Repository{{"}}"}}:{{"{{"}}.Tag{{"}}"}}' 2>/dev/null | grep -E '(^|/)todo-app:' | grep -v 'gitops/todo-app' || true)
+        imgs=$(docker images --format '{{"{{"}}.Repository{{"}}"}}:{{"{{"}}.Tag{{"}}"}}' 2>/dev/null | grep -E '(^|/)todo-app:|^arigaio/atlas:' | grep -v 'gitops/todo-app' || true)
         [ -n "$imgs" ] && { docker rmi -f $imgs >/dev/null 2>&1;  echo "images removed: $(echo "$imgs" | wc -l)"; }    || true
         vols=$(docker volume ls -q --filter "name=todo-app" 2>/dev/null || true)
         [ -n "$vols" ] && { docker volume rm $vols >/dev/null;    echo "volumes removed: $(echo $vols | wc -w)"; }     || true
         nets=$(docker network ls -q --filter "name=todo-app" 2>/dev/null || true)
         [ -n "$nets" ] && { docker network rm $nets >/dev/null 2>&1; echo "networks removed: $(echo $nets | wc -w)"; } || true
         echo "Pruned all todo-app docker resources."
+      # 3. clean local caches (venv, pytest/ruff, terraform/terragrunt, observability).
+      - task: clean:cache
 
   docker:shell:
     desc: Open a shell in the running app container
