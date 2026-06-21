@@ -31,6 +31,9 @@ services:
         condition: service_healthy
       floci:
         condition: service_started
+      # The API cannot start until the schema migration has completed.
+      atlas:
+        condition: service_completed_successfully
     networks:
       - todo-app-net
     healthcheck:
@@ -74,6 +77,26 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # One-shot Atlas migration: applies migrations/versions/*.sql then exits. The
+  # app depends on its successful completion, so the API container can NEVER
+  # start against an un-migrated schema — even with a raw `docker compose up`.
+  atlas:
+    image: arigaio/atlas:latest
+    container_name: todo-app-atlas
+    command: >-
+      migrate apply
+      --url postgres://${DB_USER:-todo}:${DB_PASSWORD:-todo}@postgres:5432/${DB_NAME:-todo}?sslmode=disable
+      --dir file://versions
+    working_dir: /migrations
+    volumes:
+      - ./migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - todo-app-net
+    restart: "no"
 
   # floci — local AWS emulator (ECR, SSM, ...), dedicated to this app and
   # INDEPENDENT of the local-gitops floci (which owns host :4566). We publish on

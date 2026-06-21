@@ -25,6 +25,10 @@ vars:
   IMAGE_TAG: '{{.IMAGE_TAG | default "dev"}}'
   # Set AWS_ENDPOINT_URL (e.g. http://localhost:4566) to target floci; empty = real AWS.
   AWS_ENDPOINT_URL: '{{.AWS_ENDPOINT_URL | default ""}}'
+  # --- Atlas (DB migrations; run via the Atlas Docker image, no host install) ---
+  ATLAS_IMAGE: '{{.ATLAS_IMAGE | default "arigaio/atlas:latest"}}'
+  ATLAS_NET: '{{.PROJECT}}-net' # compose network the running Postgres is on
+  DB_URL: '{{.DB_URL | default "postgres://todo:todo@postgres:5432/todo?sslmode=disable"}}'
 
 env:
   PYTHONPATH: "src"
@@ -385,6 +389,49 @@ tasks:
           echo "ssm: ${pfx}/{DB_USER,DB_PASSWORD,REDIS_PASSWORD}"
         done
 
+  # --- atlas (DB schema migrations; wraps the Atlas Docker image) -----------
+  # DB-touching commands run on the project network and need the stack up
+  # (task docker:up). The app's schema lives in migrations/versions/*.sql.
+  atlas:migrate:
+    desc: 'Apply pending Atlas migrations to the running Postgres (creates tables + RLS)'
+    preconditions:
+      - sh: command -v docker
+        msg: "Docker not found. Install: https://docs.docker.com/engine/install/"
+    cmds:
+      - |
+        docker run --rm --network {{.ATLAS_NET}} -v "$PWD/migrations:/work" -w /work {{.ATLAS_IMAGE}} \
+          migrate apply --url "{{.DB_URL}}" --dir file://versions
+
+  atlas:status:
+    desc: 'Show Atlas migration status (applied vs pending) for the running Postgres'
+    preconditions:
+      - sh: command -v docker
+        msg: "Docker not found. Install: https://docs.docker.com/engine/install/"
+    cmds:
+      - |
+        docker run --rm --network {{.ATLAS_NET}} -v "$PWD/migrations:/work" -w /work {{.ATLAS_IMAGE}} \
+          migrate status --url "{{.DB_URL}}" --dir file://versions
+
+  atlas:new:
+    desc: 'Create a new empty versioned migration to hand-edit (NAME=add_something)'
+    preconditions:
+      - sh: command -v docker
+        msg: "Docker not found. Install: https://docs.docker.com/engine/install/"
+    cmds:
+      - |
+        [ -n "{{.NAME}}" ] || { echo "Usage: task atlas:new NAME=<migration_name>" >&2; exit 1; }
+        docker run --rm -v "$PWD/migrations:/work" -w /work {{.ATLAS_IMAGE}} \
+          migrate new {{.NAME}} --dir file://versions
+        echo "Edit the new file under migrations/versions/, then run: task atlas:hash"
+
+  atlas:hash:
+    desc: 'Recompute migrations/versions/atlas.sum after editing migration files'
+    preconditions:
+      - sh: command -v docker
+        msg: "Docker not found. Install: https://docs.docker.com/engine/install/"
+    cmds:
+      - docker run --rm -v "$PWD/migrations:/work" -w /work {{.ATLAS_IMAGE}} migrate hash --dir file://versions
+
   # --- docker ---------------------------------------------------------------
   # Ordered bring-up mirrors the real pipeline: floci → setup (terraform/seed) →
   # app. floci and its provisioning must complete BEFORE the app boots, so the
@@ -409,7 +456,9 @@ tasks:
         else
           echo "Neither terraform nor aws found — skipping floci provisioning (ECR/SSM)."
         fi
-      # 3. app last, now that floci is provisioned.
+      # 3. app last. Compose runs the one-shot `atlas` service first via
+      #    depends_on(service_completed_successfully), so the schema + RLS exist
+      #    before the API container starts — even on a raw `docker compose up`.
       - "{{.COMPOSE}} up -d --build --wait app"
 
   docker:up:
@@ -467,4 +516,42 @@ tasks:
     desc: Full local stack test — bring up floci → terraform → app, then smoke-check
     cmds:
       - task: docker:_bringup
-      - task: docker:smoke
+      - task: docker:verify
+
+  docker:verify:
+    desc: Verify the running stack end-to-end — DB + Redis + floci (AWS) integration
+    cmds:
+      - |
+        fail=0
+        ok()  { printf '  \033[32m✓\033[0m %s\n' "$1"; }
+        bad() { printf '  \033[31m✗\033[0m %s\n' "$1"; fail=1; }
+
+        echo "── 1. API health (DB + Redis as the app sees them) ──"
+        health=$(curl -fsS http://localhost:8000/health 2>/dev/null || true)
+        echo "    ${health:-<no response — is the app up? run: task docker:up>}"
+        printf '%s' "$health" | grep -q '"database":"ok"' && ok "app → database: ok" || bad "app → database NOT ok"
+        printf '%s' "$health" | grep -q '"redis":"ok"'    && ok "app → redis: ok"    || bad "app → redis NOT ok"
+
+        echo "── 2. PostgreSQL (direct connection + schema) ──"
+        if v=$({{.COMPOSE}} exec -T postgres psql -U todo -d todo -tAc 'show server_version' 2>/dev/null | tr -d '\r'); then
+          ok "postgres reachable (v$v)"
+        else
+          bad "postgres not reachable"
+        fi
+        n=$({{.COMPOSE}} exec -T postgres psql -U todo -d todo -tAc "select count(*) from information_schema.tables where table_schema='public' and table_name in ('users','tasks','ai_suggestions')" 2>/dev/null | tr -d '\r')
+        [ "$n" = "3" ] && ok "schema migrated (users, tasks, ai_suggestions)" || bad "schema NOT migrated ($n/3 tables) — run: task atlas:migrate"
+
+        echo "── 3. Redis (direct connection) ──"
+        [ "$({{.COMPOSE}} exec -T redis redis-cli ping 2>/dev/null | tr -d '\r')" = "PONG" ] && ok "redis PONG" || bad "redis no PONG"
+
+        echo "── 4. floci (AWS) integration — from INSIDE the app container ──"
+        out=$({{.COMPOSE}} exec -T app python -c "import boto3,os; ep=os.environ.get('AWS_ENDPOINT_URL'); ecr=boto3.client('ecr',endpoint_url=ep); r=[x['repositoryName'] for x in ecr.describe_repositories()['repositories']]; ssm=boto3.client('ssm',endpoint_url=ep); val=ssm.get_parameter(Name='/gitops/dev/todo-app/DB_USER')['Parameter']['Value']; print('EP=%s ECR=%s SSM:/gitops/dev/todo-app/DB_USER=%s'%(ep,r,val))" 2>&1 || true)
+        echo "    $out"
+        printf '%s' "$out" | grep -q 'ECR=' && ok "app → floci: ECR + SSM reachable" || bad "app → floci unreachable"
+
+        echo
+        if [ "$fail" -eq 0 ]; then
+          printf '\033[32m✅ All checks passed — DB + Redis + floci integration working.\033[0m\n'
+        else
+          printf '\033[31m❌ Some checks FAILED (see above).\033[0m\n'; exit 1
+        fi
