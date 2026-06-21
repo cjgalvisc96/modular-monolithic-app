@@ -40,12 +40,13 @@ This provisions the `uv`-managed virtual environment and installs the dependency
 task docker:up
 ```
 
-This starts the application together with **PostgreSQL** and **Redis**. Services use
-`depends_on` with healthcheck conditions, so the app only starts once its dependencies report
-healthy. Once up:
+This provisions the local AWS stack in **floci** (Aurora + ElastiCache + ECR + SSM via Terraform),
+runs the schema migration and demo-data seed as init containers, then starts the API. Once up:
 
-- API docs: `http://localhost:8000/docs`
+- API reference (Swagger): `http://localhost:8000/docs`
 - Health check: `http://localhost:8000/health`
+- Project documentation (this site): `task docs:serve` → `http://127.0.0.1:8001`
+- Datastores on the host: Aurora `localhost:5432`, ElastiCache `localhost:6379`
 
 Tear it down with `task docker:down`. See [Development Setup](development/setup.md) for the full
 list of `task` targets.

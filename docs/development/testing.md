@@ -44,7 +44,8 @@ requires a real Postgres instance, configured via:
 TEST_DATABASE_URL=postgresql+asyncpg://<user>:<pass>@<host>:<port>/<db>
 ```
 
-With `task docker:up` running, a local Postgres is available to point `TEST_DATABASE_URL` at.
+With `task docker:up` running, the floci Aurora datastore is exposed on the host, so point
+`TEST_DATABASE_URL` at `postgresql+asyncpg://todo:todopassword@localhost:5432/todo`.
 
 ## Coverage gate
 

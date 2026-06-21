@@ -60,6 +60,18 @@ infra/terragrunt/{dev,prod}               # DRY environment wiring
 Terragrunt keeps the `dev` and `prod` compositions DRY, sharing module definitions while varying
 inputs per environment. Secrets are always sourced from Secrets Manager, never hardcoded.
 
+## Local simulation (floci)
+
+For local development the AWS services floci can emulate are provisioned by a dedicated Terraform
+stack, `infra/terraform/local` (`task terraform:apply ENV=local`): the **ECR** repo, **SSM**
+parameters, an **Aurora** (RDS Postgres) cluster and an **ElastiCache** (Redis) replication group —
+floci backs the datastores with real `postgres`/`valkey` containers on the compose network.
+
+`task docker:up` provisions that stack, then runs the **Atlas migration** and **demo-data seed** as
+one-shot init containers before the API — the same "DB init decoupled from API startup" rule as the
+Helm Job ([Deployment](deployment.md)). The managed control-plane services the cloud stacks use
+(VPC, EKS, CloudFront, Cognito, Route53) cannot run on floci and are absent locally.
+
 ## Infrastructure tooling
 
 | Tool | Role |

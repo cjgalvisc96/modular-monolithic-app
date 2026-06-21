@@ -23,7 +23,7 @@ sequenceDiagram
     API->>API: Verify JWT (JWKS), extract tenant_id + roles
     API->>MW: Bind tenant_id to request scope
     MW->>TX: Begin transaction
-    TX->>DB: SET LOCAL app.tenant_id = '<tenant_id>'
+    TX->>DB: SELECT set_config('app.tenant_id', '<id>', true)
     API->>DB: Repository query (any WHERE, or none)
     DB->>DB: RLS: tenant_id = current_setting('app.tenant_id')
     DB-->>API: Only this tenant's rows
@@ -43,12 +43,13 @@ sequenceDiagram
 
 ## Layer 2 — Application (request → transaction binding)
 
-- `presentation/api/middleware/tenant_middleware.py` extracts the verified `tenant_id` and binds it
-  to the current request/transaction scope **ahead of any DB call**.
-- `shared/infrastructure/db/tenant_context.py` issues
-  `SET LOCAL app.tenant_id = '<value>'` at the start of each transaction, sourced from that bound
-  request context. `SET LOCAL` scopes the variable to the transaction, so it cannot leak across
-  pooled connections.
+- `presentation/api/dependencies.py` (`get_request_context`) extracts the verified `tenant_id` and
+  binds it to a request **contextvar**, **ahead of any DB call**.
+- `shared/infrastructure/db/unit_of_work.py` opens the transaction and
+  `shared/infrastructure/db/tenant_context.py` issues
+  `SELECT set_config('app.tenant_id', '<value>', true)` — the parameterized, transaction-local form
+  (plain `SET LOCAL` cannot take a bound parameter). Scoped to the transaction, it cannot leak
+  across pooled connections.
 
 ## Layer 3 — Database (PostgreSQL RLS)
 

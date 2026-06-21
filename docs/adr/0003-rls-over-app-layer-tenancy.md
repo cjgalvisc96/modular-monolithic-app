@@ -27,7 +27,8 @@ CREATE POLICY tenant_isolation ON tasks
   USING (tenant_id = current_setting('app.tenant_id')::uuid);
 ```
 
-The current tenant is bound per transaction via `SET LOCAL app.tenant_id = '<value>'` in
+The current tenant is bound per transaction via `set_config('app.tenant_id', '<value>', true)` (the
+parameterized, transaction-local form) in
 `shared/infrastructure/db/tenant_context.py`, sourced from the verified Cognito `tenant_id` claim
 through the tenant-binding middleware.
 
@@ -40,13 +41,13 @@ the source of truth.
   database itself refuses rows that do not match the session's `tenant_id`, regardless of what the
   query filters on.
 - **Positive — correctness is centralized.** Tenant isolation lives in a handful of policy files
-  and one `SET LOCAL` call, not scattered across every query.
+  and one `set_config` call, not scattered across every query.
 - **Negative — every transaction must set the session var.** Any DB access that forgets to set
   `app.tenant_id` will see no rows (fail closed). This is enforced by the tenant-binding path and
   must be respected by CLI/background code paths too.
 - **Negative — testing requires real Postgres.** RLS is a PostgreSQL feature and cannot be
   exercised against SQLite; the RLS isolation test needs a real Postgres instance
   (`TEST_DATABASE_URL`). See [Testing](../development/testing.md).
-- **Negative — `SET LOCAL` and connection pooling.** Because `SET LOCAL` is transaction-scoped, the
+- **Negative — transaction-scoped binding and connection pooling.** Because the setting is transaction-scoped, the
   tenant variable must be set inside the transaction that runs the query so it cannot leak across
   pooled connections.

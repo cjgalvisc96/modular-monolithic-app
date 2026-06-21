@@ -23,7 +23,10 @@ The application lives under `src/todo_app/`. There are three structural tiers:
 - **Bounded contexts** (`contexts/{shared,users,tasks,ai}/`) — each a full vertical slice of
   `domain/`, `application/`, `infrastructure/`, plus a `container.py` composition root.
 - **Presentation** (`presentation/{api,cli}/`) — a FastAPI app built with a builder pattern and a
-  Typer CLI. Both consume the same `application/` use cases; neither holds business logic.
+  Typer CLI. Both consume the same `application/` use cases; neither holds business logic. The API
+  paginates list endpoints (`Page`/`PageResponse`), caches GET-by-id reads in Redis (invalidated on
+  writes), and applies a Redis-backed rate-limit middleware. One-shot ops jobs (e.g. data seeding)
+  live in `scripts/` and run as init containers, not CLI commands.
 - **Core** (`core/`) — `config.py` (Pydantic settings), `di/container.py` (the root
   `ApplicationContainer`), `logging.py`, and `telemetry.py` (OpenTelemetry).
 

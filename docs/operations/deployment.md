@@ -64,3 +64,9 @@ are carried in `values-dev.yaml` vs `values-prod.yaml`.
 The infra layer has its own tests under `infra/tests/` (Terratest, Trivy). A successful local
 install means `helm install` against a local kind/k3d cluster wired via local-gitops, with the DB
 init Job completing before API pods report ready.
+
+For a lighter loop, the docker-compose stack (`task docker:up`) reproduces the same ordering with
+**init containers**: an `atlas` container runs the migrations and a `seed` container loads demo data
+(`todo_app/scripts/seed.py`), both completing before the API container starts — mirroring the Helm
+DB-init Job. The image exposes the `todo-api` (serve) and `todo-seed` (seed) entry points. See
+[Development Setup](../development/setup.md).
