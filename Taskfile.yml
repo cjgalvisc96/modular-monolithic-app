@@ -20,6 +20,8 @@ vars:
   AWS_PROFILE_NAME: '{{.AWS_PROFILE_NAME | default "floci"}}'
   # Our floci is independent of the local-gitops floci (:4566) — published on :4576.
   FLOCI_ENDPOINT: '{{.FLOCI_ENDPOINT | default "http://localhost:4576"}}'
+  # The local-gitops platform's floci (shared across apps) listens on :4566.
+  GITOPS_FLOCI_ENDPOINT: '{{.GITOPS_FLOCI_ENDPOINT | default "http://localhost:4566"}}'
   ECR_REPO: '{{.ECR_REPO | default "todo-app"}}'
   ECR_REGISTRY: '{{.ECR_REGISTRY | default ""}}'
   IMAGE_TAG: '{{.IMAGE_TAG | default "dev"}}'
@@ -390,6 +392,12 @@ tasks:
           aws $EP ssm put-parameter --overwrite --type SecureString --name "${pfx}/REDIS_PASSWORD" --value "redispass" >/dev/null
           echo "ssm: ${pfx}/{DB_USER,DB_PASSWORD,REDIS_PASSWORD}"
         done
+
+  gitops:seed-floci:
+    desc: 'Seed THIS app into the local-gitops floci (SSM params + ECR repo). ENDPOINT defaults to :4566'
+    deps: [aws:profile]
+    cmds:
+      - AWS_PROFILE={{.AWS_PROFILE_NAME}} AWS_ENDPOINT_URL={{.GITOPS_FLOCI_ENDPOINT}} ./infra/k8s/gitops/floci-seed.sh
 
   floci:wait-datastores:
     desc: 'Wait until the floci-provisioned Aurora backing accepts connections (fails loudly if not)'
