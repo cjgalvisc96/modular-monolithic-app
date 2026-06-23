@@ -62,6 +62,7 @@ nav:
       - Governance: development/governance.md
   - Operations:
       - Deployment: operations/deployment.md
+      - CI/CD (Gitea Actions): operations/cicd.md
       - GitOps Deployment: operations/gitops.md
       - Observability: operations/observability.md
       - Infrastructure: operations/infrastructure.md

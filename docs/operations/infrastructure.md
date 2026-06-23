@@ -72,6 +72,13 @@ one-shot init containers before the API — the same "DB init decoupled from API
 Helm Job ([Deployment](deployment.md)). The managed control-plane services the cloud stacks use
 (VPC, EKS, CloudFront, Cognito, Route53) cannot run on floci and are absent locally.
 
+In the [`local-gitops`](https://github.com/cjgalvisc96/local-gitops) lab the **same** stack is
+applied against the lab's floci (`:4566`) two ways — `install.sh` runs it at bootstrap, and the
+`tf-floci` Gitea pipeline runs it for ongoing changes (`workflow_dispatch`: `plan`/`apply`/`destroy`).
+Both share one Terraform state in floci S3, so they don't re-create each other's resources. There the
+ECR repo + SSM params are what matter (the kind clusters use in-namespace Postgres/Redis, so the
+stack's Aurora/ElastiCache are unused). See [CI/CD](cicd.md).
+
 ## Infrastructure tooling
 
 | Tool | Role |

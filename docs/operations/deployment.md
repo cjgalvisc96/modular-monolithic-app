@@ -66,7 +66,8 @@ No workload uses a shared or account-wide role. See
 | `prod` | `todo-app` (prod cluster) | Production environment |
 
 Each cluster has independent namespaces and per-namespace Kubernetes RBAC. Environment differences
-are carried in `values-dev.yaml` vs `values-prod.yaml`.
+are carried in `values-dev.yaml` vs `values-prod.yaml` — which the [CI/CD](cicd.md) pipelines bump
+(dev on merge, prod on manual promote) for Argo CD to reconcile.
 
 ## Local workflow ("floci")
 

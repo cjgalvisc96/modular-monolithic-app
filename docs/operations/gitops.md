@@ -4,8 +4,9 @@ The service deploys **pull-based via Argo CD** onto the
 [`local-gitops`](https://github.com/cjgalvisc96/local-gitops) platform — `kind`
 dev/prod clusters, each running its own Argo CD as an **app-of-apps** that
 recurses `platform-config/envs/<env>`, with Gitea as the in-cluster Git server,
-floci as the local AWS, and the External Secrets Operator. CI builds, tests and
-plans infra; it never deploys.
+floci as the local AWS, and the External Secrets Operator. The
+[CI/CD pipeline](cicd.md) builds and pushes the image and bumps the
+`values-*.yaml` tag; Argo CD reconciles that commit — it does the deploying.
 
 ## The contract: self-contained app, generic platform
 
@@ -17,7 +18,7 @@ near-zero, repeatable change — identical in shape for every future app:
 | Argo registration | this repo | `infra/k8s/gitops/applications/{todo-app,dependencies}-{dev,prod}.yaml` |
 | API workload, IRSA SAs, RBAC, namespace, db-init | the Helm chart | `infra/k8s/helm/` |
 | Local datastores (Postgres/Redis) | this repo | `infra/k8s/dependencies/base/` |
-| floci SSM params + ECR repo | this repo | `infra/k8s/gitops/floci-seed.sh` |
+| floci SSM params + ECR repo | this repo | `infra/terraform/local` (via the `tf-floci` pipeline / `install.sh`; `infra/k8s/gitops/floci-seed.sh` is the imperative fallback) |
 
 The platform contributes only generic primitives — clusters, Argo CD, the ESO
 `aws-ssm` `ClusterSecretStore`, ingress-nginx, DNS, floci, Gitea — and carries
@@ -38,7 +39,8 @@ Secrets are materialized by an `ExternalSecret` reading
 `/gitops/<env>/todo-app/{DB_USER,DB_PASSWORD,REDIS_PASSWORD}` from the platform's
 `aws-ssm` store (floci SSM). Ingress is `todo-app.<env>.local` on `nginx`; pods
 carry Prometheus scrape annotations; the AWS SDK points at floci
-(`AWS_ENDPOINT_URL=http://172.18.0.1:4566`).
+(`AWS_ENDPOINT_URL=http://<kind-bridge-gateway>.0.1:4566` — the lab derives the
+subnet prefix, so it is not always `172.18`).
 
 ## Onboarding (the minimal change on the platform)
 
@@ -49,9 +51,12 @@ carry Prometheus scrape annotations; the AWS SDK points at floci
    APP_REPO_PATH=$(pwd) APP_IMAGE=local/todo-app \
    ./install.sh            # or: task install:app
    ```
-   This also runs this repo's `floci-seed.sh`. To seed floci by hand instead:
+   This also applies this repo's `infra/terraform/local` stack against floci (the
+   same stack the `tf-floci` pipeline runs — see [CI/CD](cicd.md)), provisioning
+   the ECR repo + SSM params. To seed floci by hand instead:
    ```bash
-   task gitops:seed-floci   # → http://localhost:4566
+   task terraform:apply ENV=local   # Terraform-native; or the imperative:
+   task gitops:seed-floci           # → http://localhost:4566
    ```
 2. **Drop the four Application manifests** into the platform control repo:
    ```bash
