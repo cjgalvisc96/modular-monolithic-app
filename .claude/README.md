@@ -37,6 +37,6 @@ Tester owns the testing rule.
 
 ## Source of truth
 
-These files summarize and operationalize the design described in the repository's `plan.md`,
-`project-structure.md`, `todo-app-architecture-summary.md`, and the `docs/` site. Where this
-directory and the design docs ever disagree, the design docs win and these files should be updated.
+These files summarize and operationalize the design described in the `docs/` site and the root
+planning docs (`enterpise-plan.md`, `copier-plan.md`). Where this directory and the design docs ever
+disagree, the design docs win and these files should be updated.

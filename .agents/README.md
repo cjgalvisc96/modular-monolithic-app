@@ -33,8 +33,8 @@ in its `role.md` defining its mission, responsibilities, inputs, outputs, and �
 
 ## Shared project conventions every role enforces
 
-These are the non-negotiables that bind all roles. They are documented in detail under `docs/` and
-in the repository's `plan.md`, `project-structure.md`, and `todo-app-architecture-summary.md`:
+These are the non-negotiables that bind all roles. They are documented in detail in the `docs/`
+site (`task docs:serve`) and the root planning docs (`enterpise-plan.md`, `copier-plan.md`):
 
 - **Dependency direction**: `domain → application → infrastructure`, never reversed. Only
   `container.py` may import across all three layers.

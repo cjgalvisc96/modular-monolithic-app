@@ -60,28 +60,11 @@ are carried in `values-dev.yaml` vs `values-prod.yaml`.
 
 ## Local workflow ("floci")
 
-`infra/k8s/gitops/` integrates with [local-gitops](https://github.com/cjgalvisc96/local-gitops),
-which stands up `kind` dev/prod clusters, each running its own Argo CD as an **app-of-apps** that
-recurses `platform-config/envs/<env>`. Deployment is pull-based: Argo CD reconciles this repo's Helm
-chart; CI never deploys.
-
-**The app is self-contained; the platform is generic.** Everything app-specific lives in this repo,
-so onboarding the platform is a near-zero, repeatable change — the same shape for every future app:
-
-| Concern | Where | Files |
-|---|---|---|
-| Argo registration | this repo | `infra/k8s/gitops/applications/{todo-app,dependencies}-{dev,prod}.yaml` |
-| API workload + db-init + IRSA SAs + RBAC + namespace | the Helm chart | `infra/k8s/helm/` |
-| Local datastores (Postgres/Redis) | this repo | `infra/k8s/dependencies/base/` |
-| floci SSM params + ECR repo | this repo | `infra/k8s/gitops/floci-seed.sh` (`task gitops:seed-floci`) |
-
-The two **Applications** order the rollout: the datastores Application (`sync-wave 1`) becomes
-healthy before the app Application (`sync-wave 2`), so Postgres exists before the chart's
-`pre-install` db-init hook runs migrations. The platform contributes only generic primitives
-(clusters, Argo CD, the ESO `aws-ssm` store, ingress, DNS, floci, Gitea) and carries **no
-`todo-app` knowledge**. The whole platform-side footprint per app is its Application manifests in
-`platform-config/envs/<env>/` plus one `sourceRepos` line. The full contract is in
-[`infra/k8s/gitops/README.md`](https://github.com/cjgalvisc96/modular-monolithic-app/tree/master/infra/k8s/gitops).
+`infra/k8s/gitops/` integrates with [local-gitops](https://github.com/cjgalvisc96/local-gitops)
+to simulate the multi-cluster topology locally: pull-based Argo CD (app-of-apps), the app's own
+Helm chart and datastores, secrets via the ESO `aws-ssm` store, and floci as the local AWS. The app
+is self-contained and the platform stays generic, so onboarding is a near-zero, repeatable change.
+See **[GitOps Deployment](gitops.md)** for the full contract and onboarding steps.
 
 For a lighter loop, the docker-compose stack (`task docker:up`) reproduces the same ordering with
 **init containers**: an `atlas` container runs the migrations and a `seed` container loads demo data
