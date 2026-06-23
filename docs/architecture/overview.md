@@ -5,9 +5,9 @@ deployable unit, but internally it is partitioned into bounded contexts that are
 testable, independently reasoned about, and — in principle — independently extractable into
 services if that ever becomes necessary.
 
-This page is a high-level summary. The authoritative narrative lives in the repository root at
-`todo-app-architecture-summary.md`, with the physical layout in `project-structure.md` and the
-phased delivery plan in `plan.md`. Read those for the full detail; this page orients you.
+This page is a high-level summary. The authoritative narrative lives in the repository root planning
+docs — `enterpise-plan.md` and `copier-plan.md`. Read those for the full detail; this page orients
+you.
 
 ## Design principles
 

@@ -11,19 +11,29 @@ The chart lives at `infra/k8s/helm/`:
 ```
 infra/k8s/helm/
 ├── Chart.yaml
-├── values-dev.yaml
-├── values-prod.yaml
+├── values.yaml              # base values
+├── values-dev.yaml          # dev overrides
+├── values-prod.yaml         # prod overrides
+├── NOTES.txt
 └── templates/
+    ├── _helpers.tpl
+    ├── namespace.yaml        # app owns its namespace (toggle via namespaceConfig.create)
+    ├── service-account.yaml  # IRSA-annotated service accounts
+    ├── rbac.yaml             # cluster-internal Kubernetes RBAC
+    ├── configmap.yaml        # non-secret app config
+    ├── secret.yaml           # in-cluster secret (local/dev)
+    ├── externalsecret.yaml   # ESO pull from the aws-ssm store (floci/SSM)
+    ├── job-db-init.yaml      # DB init/migrations as an independent Job (Helm hook)
     ├── deployment.yaml       # API Deployment (multiple replicas)
     ├── service.yaml
-    ├── job-db-init.yaml      # DB init/migrations as an independent Job
-    ├── rbac.yaml             # cluster-internal Kubernetes RBAC
-    ├── service-account.yaml  # IRSA-annotated service accounts
-    └── namespace.yaml
+    ├── ingress.yaml
+    └── hpa.yaml              # horizontal pod autoscaler
 ```
 
-The chart is fully declarative — namespace, service account, deployment, service, RBAC, and the DB
-init Job are all expressed as templates parameterized by environment values.
+The chart is fully declarative — namespace, service account, deployment, service, RBAC, config,
+secrets (in-cluster and via ESO), and the DB init Job are all expressed as templates parameterized
+by environment values. The app **owns its namespace** (created by the chart, or by Argo CD's
+`CreateNamespace` when `namespaceConfig.create=false`), so the GitOps platform stays app-agnostic.
 
 ## DB init as a separate Job
 

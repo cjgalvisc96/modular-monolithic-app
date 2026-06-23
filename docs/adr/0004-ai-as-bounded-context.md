@@ -41,4 +41,4 @@ Model **AI as its own bounded context** (`ai`), a peer to `users` and `tasks`:
   contains the AWS blast radius and keeps the other contexts pure.
 - **Open question.** Whether suggestions are persisted (adding a tenant-isolated `AiSuggestionModel`
   + RLS policy) or ephemeral, and whether generation runs inline or via background dispatch, are
-  tracked as open questions in `plan.md`.
+  tracked as open questions in the root planning docs (`enterpise-plan.md`).
