@@ -1,0 +1,30 @@
+name: Setup lab tools
+description: >-
+  Install the pinned CLIs the lab CD/promote jobs need (aws, kind, yq). docker
+  and git already ship in the job image. Versions track the local-gitops lab.
+
+runs:
+  using: composite
+  steps:
+    - name: Install kind, yq, aws
+      shell: bash
+      run: |
+        set -euo pipefail
+        KIND_VERSION=v0.24.0
+        YQ_VERSION=v4.44.3
+        AWS_VERSION=2.22.0
+        if ! command -v kind >/dev/null 2>&1; then
+          curl -fsSLo /usr/local/bin/kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          chmod +x /usr/local/bin/kind
+        fi
+        if ! command -v yq >/dev/null 2>&1; then
+          curl -fsSLo /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          chmod +x /usr/local/bin/yq
+        fi
+        if ! command -v aws >/dev/null 2>&1; then
+          tmp=$(mktemp -d)
+          curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_VERSION}.zip" -o "$tmp/aws.zip"
+          unzip -q "$tmp/aws.zip" -d "$tmp"
+          "$tmp/aws/install" --update
+          rm -rf "$tmp"
+        fi

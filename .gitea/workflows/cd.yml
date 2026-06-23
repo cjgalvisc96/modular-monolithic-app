@@ -1,0 +1,87 @@
+name: CD
+
+# Continuous deploy to DEV. On every push to main: build the prod image, push
+# it to the floci ECR (registry of record), kind-load it into the dev cluster,
+# then bump infra/k8s/helm/values-dev.yaml to the new tag and commit it back.
+# Argo CD on dev reconciles that commit and rolls the deployment.
+#
+# Runs on the lab's host act_runner (runs-on: lab): host networking + the host
+# docker daemon, so floci is at localhost:4566 and `kind load` reaches the kind
+# node containers directly. PROD is never touched here — see promote.yml.
+
+on:
+  push:
+    branches: [main]
+    # Only image-affecting changes rebuild. The values-dev.yaml bump this
+    # workflow commits is deliberately NOT in this list, so it can't self-trigger.
+    paths:
+      - "src/**"
+      - "migrations/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".gitea/workflows/cd.yml"
+      - ".gitea/actions/setup-lab/**"
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  APP_IMAGE: local/todo-app
+  ECR_REPO: gitops/todo-app
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://localhost:4566
+
+jobs:
+  build-deploy:
+    runs-on: lab
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.gitea/actions/setup-lab
+
+      - name: Resolve image tag
+        id: vars
+        run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build prod image
+        run: docker build --target prod -t "$APP_IMAGE:${{ steps.vars.outputs.tag }}" .
+
+      - name: Push to floci ECR
+        run: |
+          set -euo pipefail
+          tag="${{ steps.vars.outputs.tag }}"
+          aws --endpoint-url "$AWS_ENDPOINT_URL" ecr describe-repositories --repository-names "$ECR_REPO" >/dev/null 2>&1 \
+            || aws --endpoint-url "$AWS_ENDPOINT_URL" ecr create-repository --repository-name "$ECR_REPO" >/dev/null
+          REPO_URI=$(aws --endpoint-url "$AWS_ENDPOINT_URL" ecr describe-repositories \
+            --repository-names "$ECR_REPO" --query 'repositories[0].repositoryUri' --output text)
+          aws --endpoint-url "$AWS_ENDPOINT_URL" ecr get-login-password \
+            | docker login --username AWS --password-stdin "${REPO_URI%%/*}"
+          docker tag "$APP_IMAGE:$tag" "$REPO_URI:$tag"
+          docker push "$REPO_URI:$tag"
+
+      - name: Load image into the dev cluster
+        run: kind load docker-image "$APP_IMAGE:${{ steps.vars.outputs.tag }}" --name dev
+
+      - name: Bump values-dev.yaml and commit
+        run: |
+          set -euo pipefail
+          tag="${{ steps.vars.outputs.tag }}"
+          yq -i ".image.tag = \"$tag\"" infra/k8s/helm/values-dev.yaml
+          if git diff --quiet -- infra/k8s/helm/values-dev.yaml; then
+            echo "values-dev.yaml already at $tag — nothing to commit"
+            exit 0
+          fi
+          git config user.name "gitea-actions"
+          git config user.email "actions@gitops.local"
+          git add infra/k8s/helm/values-dev.yaml
+          git commit -m "ci: deploy $tag to dev [skip ci]"
+          scheme="${GITHUB_SERVER_URL%%://*}"
+          host="${GITHUB_SERVER_URL#*://}"
+          git push "${scheme}://x-access-token:${{ github.token }}@${host}/${GITHUB_REPOSITORY}.git" HEAD:main
