@@ -42,31 +42,23 @@ carry Prometheus scrape annotations; the AWS SDK points at floci
 (`AWS_ENDPOINT_URL=http://<kind-bridge-gateway>.0.1:4566` — the lab derives the
 subnet prefix, so it is not always `172.18`).
 
-## Onboarding (the minimal change on the platform)
+## Onboarding (the app self-onboards — no platform change)
 
-1. **Register the repo** so the platform mirrors it and builds the image into the
-   clusters:
-   ```bash
-   DEPLOY_APP=true APP_REPO_NAME=modular-monolithic-app \
-   APP_REPO_PATH=$(pwd) APP_IMAGE=local/todo-app \
-   ./install.sh            # or: task install:app
-   ```
-   This also applies this repo's `infra/terraform/local` stack against floci (the
-   same stack the `tf-floci` pipeline runs — see [CI/CD](cicd.md)), provisioning
-   the ECR repo + SSM params. To seed floci by hand instead:
-   ```bash
-   task terraform:apply ENV=local   # Terraform-native; or the imperative:
-   task gitops:seed-floci           # → http://localhost:4566
-   ```
-2. **Drop the four Application manifests** into the platform control repo:
-   ```bash
-   cp infra/k8s/gitops/applications/*-dev.yaml   <local-gitops>/platform-config/envs/dev/
-   cp infra/k8s/gitops/applications/*-prod.yaml  <local-gitops>/platform-config/envs/prod/
-   ```
-3. **Allow-list this repo** with one line under `sourceRepos` in each env's
-   `platform-config/envs/<env>/project.yaml`.
+The platform installs app-agnostic; the app adds **itself** to a running lab with three one-time
+tasks (see also the [Launch](../launch.md) page for the plain-words version):
 
-Argo CD's `directory.recurse` discovers the rest.
+```bash
+task gitea:create-repo      # create gitops/modular-monolithic-app in the lab's Gitea
+task argo:add-gitea-repo    # register the repo credential + apply this app's Argo
+                            #   Applications (todo-app + dependencies) on dev and prod
+task gitea:ship             # push the code → ci-cd.yml builds + pushes the image → Argo deploys
+```
+
+`argo:add-gitea-repo` applies the manifests in `infra/k8s/gitops/applications/` directly to each
+cluster's Argo CD (`dependencies-<env>.yaml`, `todo-app-<env>.yaml`), so no copy into the platform's
+`platform-config/` is needed. The floci ECR repo + SSM params are seeded by the `tf-floci` pipeline
+(or `task gitops:seed-floci`). Until the first `gitea:ship`, Argo shows the app's Applications as
+`Unknown`/`Failed` (empty repo) — they go green once content is shipped.
 
 ## Local caveats (`kind`, not AWS)
 
