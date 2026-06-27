@@ -19,6 +19,9 @@ task docs:serve     # → http://127.0.0.1:8001
 
 ## Quick start
 
+There are **two ways to run it** — see the **[Launch](docs/launch.md)** page (also in the docs site)
+for the simple step-by-step. The fast one:
+
 ```bash
 task env:create      # uv venv (Python 3.14) + deps + .env
 task docker:up        # ordered bring-up: floci → terraform → atlas → seed → API
@@ -26,7 +29,8 @@ open http://localhost:8000/docs     # Swagger (live API reference)
 ```
 
 A single `task docker:up` gives a fully provisioned, migrated, seeded, host-reachable stack.
-`task help` lists every command.
+`task help` lists every command. To run it the production way (built by a pipeline, deployed by Argo
+CD on the local-gitops lab), follow **Option B** on the Launch page.
 
 ### What runs locally (AWS, simulated by floci)
 

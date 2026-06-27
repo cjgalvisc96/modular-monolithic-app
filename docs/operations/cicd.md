@@ -139,31 +139,36 @@ merge to main
                       kind load → prod  ·  bump values-prod.yaml  ·  Argo CD (prod) syncs
 ```
 
-## Iterating locally without a reinstall
+## Local lab: from zero to deployed
 
-`origin` is the **personal GitHub** repo (persistence + the `.github/` quality mirror). The local
-lab is a **separate push target**: the Gitea repo at `…/modular-monolithic-app` is what the
-`runs-on: lab` runner watches. So to re-test a change you do **not** re-run `install.sh` — you push
-the commit straight to the lab Gitea, which triggers `ci-cd.yml`:
+The platform (`local-gitops`) installs **app-agnostic** — it knows nothing about this app. The app
+**self-onboards** into the running lab with three one-time tasks, then iterates with `gitea:ship`.
+`origin` stays the **personal GitHub** repo (persistence + the `.github/` quality mirror); the lab
+Gitea repo is a **separate push target** that the `runs-on: lab` runner watches.
 
 ```bash
-git commit -am "…"     # the pipeline builds the committed HEAD, not the working tree
-task gitea:ship        # force-push HEAD → lab Gitea main (treated as a disposable mirror)
-task gitea:runs        # show recent Actions runs (falls back to the Actions URL on Gitea < 1.23)
+# --- one time: build the lab, then onboard the app ---
+(cd ../local-gitops && task prune && task install)   # platform only (no app artifacts)
+task prune                 # optional: clears the app's standalone docker stack
+task gitea:create-repo     # create the empty Gitea repo in the lab
+task argo:add-gitea-repo   # register the repo + apply the app's Argo Applications on dev/prod
+task gitea:ship            # push content → pipeline → Argo deploys
+
+# --- then iterate, N times, no reinstall ---
+git commit -am "…" && task gitea:ship   # app change → pipeline → Argo redeploys
+task gitea:runs                         # recent Actions runs (UI link on Gitea < 1.23)
+(cd ../local-gitops && task gitea:ship) # platform change → re-push platform-config/gitops-apps
 ```
+
+`create-repo` / `argo:add-gitea-repo` order-relative-to-`ship` is flexible — until both the repo and
+the Applications exist *and* content is shipped, Argo shows the app apps as `Unknown`/`Failed`
+(empty repo); they go green after the first ship.
 
 `gitea:ship` targets `{GITEA_NS}/{GITEA_REPO_NAME}:{GITEA_BRANCH}` (lab defaults
 `gitops/modular-monolithic-app:main`, Gitea at `gitea.dev.local`, creds from
-`local-gitops/lib/common.sh`); override any of those as env vars for a different lab. It is a **force
-push** because the `cd` job commits its own `values-*.yaml` bump back to Gitea `main` — the lab copy
-is disposable and re-derived from your HEAD each ship, while GitHub stays the source of truth.
-
-The default namespace is the **`gitops` org** because `local-gitops` `install.sh` now creates the
-`gitops/modular-monolithic-app` repo **and registers it with Argo by default** — the same repoURL the
-Application manifests in `infra/k8s/gitops/applications/` use. So a ship flows **pipeline → Argo →
-dev** once those Applications are applied (`DEPLOY_APP=true`, or drop them into
-`platform-config/envs/<env>/`). The repo and Argo credential exist regardless; only the Applications
-(the actual deploy) are `DEPLOY_APP`-gated — and none of this needs a teardown.
+`local-gitops/lib/common.sh`); override any as env vars for a different lab. It is a **force push**
+because the `cd` job commits its own `values-*.yaml` bump back to Gitea `main` — the lab copy is
+disposable and re-derived from your HEAD each ship, while GitHub stays the source of truth.
 
 ## Local vs. real cloud
 

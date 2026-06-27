@@ -32,6 +32,10 @@ vars:
   GITEA_BRANCH: '{{.GITEA_BRANCH | default "main"}}'
   GITEA_USER: '{{.GITEA_USER | default "adminlocal"}}'
   GITEA_PASSWORD: '{{.GITEA_PASSWORD | default "adminlocal1"}}'
+  # In-cluster Gitea URL Argo uses (the MetalLB git-lb IP) — must match the
+  # repoURL in infra/k8s/gitops/applications/*. Argo clusters to register on.
+  GITEA_INCLUSTER_URL: '{{.GITEA_INCLUSTER_URL | default "http://172.18.255.209:3000"}}'
+  ARGO_CLUSTERS: '{{.ARGO_CLUSTERS | default "dev prod"}}'
   ECR_REPO: '{{.ECR_REPO | default "todo-app"}}'
   ECR_REGISTRY: '{{.ECR_REGISTRY | default ""}}'
   IMAGE_TAG: '{{.IMAGE_TAG | default "dev"}}'
@@ -403,6 +407,52 @@ tasks:
     deps: [aws:profile]
     cmds:
       - AWS_PROFILE={{.AWS_PROFILE_NAME}} AWS_ENDPOINT_URL={{.GITOPS_FLOCI_ENDPOINT}} ./infra/k8s/gitops/floci-seed.sh
+
+  # --- onboard this app into a running lab (run once, after install:app) ----
+  gitea:create-repo:
+    desc: 'Create the empty Gitea repo {{.GITEA_NS}}/{{.GITEA_REPO_NAME}} in the running lab (idempotent)'
+    cmds:
+      - |
+        set -e
+        code=$(curl -s -o /dev/null -w "%{http_code}" -u {{.GITEA_USER}}:{{.GITEA_PASSWORD}} -X POST \
+          "{{.GITEA_WEB}}/api/v1/orgs/{{.GITEA_NS}}/repos" -H 'Content-Type: application/json' \
+          -d '{"name":"{{.GITEA_REPO_NAME}}","private":false,"auto_init":false}')
+        case "$code" in
+          201) echo "created {{.GITEA_NS}}/{{.GITEA_REPO_NAME}}" ;;
+          409) echo "{{.GITEA_NS}}/{{.GITEA_REPO_NAME}} already exists — ok" ;;
+          *)   echo "ERROR: unexpected HTTP $code creating repo (is the lab up? is {{.GITEA_NS}} an org?)" >&2; exit 1 ;;
+        esac
+        echo "next: task argo:add-gitea-repo  then  task gitea:ship"
+
+  argo:add-gitea-repo:
+    desc: 'Wire this app into Argo CD on each cluster ({{.ARGO_CLUSTERS}}): register the repo credential + apply its Applications (deps + app)'
+    cmds:
+      - |
+        set -e
+        for c in {{.ARGO_CLUSTERS}}; do
+          # 1) repository credential so Argo can read the app repo
+          kubectl --context "kind-$c" -n argocd apply -f - <<EOF >/dev/null
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: repo-{{.GITEA_REPO_NAME}}
+          namespace: argocd
+          labels:
+            argocd.argoproj.io/secret-type: repository
+        stringData:
+          type: git
+          name: {{.GITEA_REPO_NAME}}
+          url: {{.GITEA_INCLUSTER_URL}}/{{.GITEA_NS}}/{{.GITEA_REPO_NAME}}.git
+          username: {{.GITEA_USER}}
+          password: {{.GITEA_PASSWORD}}
+        EOF
+          # 2) the app's Argo Applications for this cluster (deps then app)
+          kubectl --context "kind-$c" -n argocd apply \
+            -f infra/k8s/gitops/applications/dependencies-$c.yaml \
+            -f infra/k8s/gitops/applications/todo-app-$c.yaml >/dev/null
+          echo "kind-$c: registered repo + applied Applications (dependencies-$c, todo-app-$c)"
+        done
+        echo "next: task gitea:ship  (Applications stay Unknown/Failed until the first ship adds content)"
 
   # --- local CI/CD loop (push to lab Gitea; no reinstall) -------------------
   gitea:ship:
