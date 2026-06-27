@@ -84,7 +84,11 @@ module "eks" {
 module "ecr" {
   source = "../../modules/ecr"
 
-  repository_name      = var.project
+  # Env-scoped name (todo-app-prod) so it doesn't collide with the dev stack's
+  # `todo-app` repo on the single shared floci account. The promote pipeline
+  # pulls the dev-built image from the dev `todo-app` repo, so this prod repo is
+  # parity only. On real AWS (separate accounts) both could be plain `todo-app`.
+  repository_name      = local.name
   image_tag_mutability = "IMMUTABLE"
   max_tagged_images    = 50
   tags                 = local.tags
