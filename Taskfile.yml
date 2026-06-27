@@ -350,6 +350,11 @@ tasks:
         docker pull "${REPO_URI}:{{.IMAGE_TAG}}"
 
   # --- k8s ------------------------------------------------------------------
+  k8s:expose-todo-db:
+    desc: 'Port-forward the dev todo-app Postgres to localhost:15432 (DBeaver/psql: todo/todo, db todo)'
+    cmds:
+      - kubectl --context kind-dev -n todo-app port-forward svc/postgres 15432:5432
+
   k8s:trivy:
     desc: Trivy misconfiguration scan of the Helm chart (HIGH/CRITICAL)
     preconditions:
