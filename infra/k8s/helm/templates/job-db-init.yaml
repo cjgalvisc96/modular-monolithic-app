@@ -11,8 +11,10 @@ Ordered with Argo CD sync-waves (not Helm hooks) so it works under GitOps:
                      the DB creds (incl. the ESO-materialized Secret, which Argo
                      waits to be Ready before this wave) exist when it runs, and
                      BEFORE the API Deployment (wave 2).
-  - Replace=true   : a completed Job is immutable; replace it each sync so the
-                     migration re-runs cleanly (Atlas is idempotent).
+  - Replace=true,Force=true : a completed Job is immutable, and `kubectl replace`
+                     needs the auto-generated spec.selector — so Force makes Argo
+                     delete + recreate the Job each sync (fresh selector), which
+                     re-runs the migration cleanly (Atlas is idempotent).
 */ -}}
 apiVersion: batch/v1
 kind: Job
@@ -24,7 +26,7 @@ metadata:
     app.kubernetes.io/component: db-init
   annotations:
     argocd.argoproj.io/sync-wave: "1"
-    argocd.argoproj.io/sync-options: Replace=true
+    argocd.argoproj.io/sync-options: Replace=true,Force=true
 spec:
   backoffLimit: {{ .Values.dbInit.backoffLimit }}
   activeDeadlineSeconds: {{ .Values.dbInit.activeDeadlineSeconds }}
@@ -39,13 +41,39 @@ spec:
       automountServiceAccountToken: true
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        # The migration files (atlas.hcl + versions/) live in the app image; the
+        # stock Atlas image ships none and k8s has no host bind-mount, so we share
+        # them between containers via an emptyDir.
+        - name: migrations
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      initContainers:
+        # Copy migrations out of the app image into the shared volume.
+        - name: load-migrations
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # -r (not -a): the non-root user can't preserve ownership/timestamps
+          # onto the emptyDir ("Operation not permitted"); contents are enough.
+          command: ["sh", "-c", "cp -r /app/migrations/. /migrations/"]
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
       containers:
         - name: atlas-migrate
           image: "{{ .Values.dbInit.image.repository }}:{{ .Values.dbInit.image.tag }}"
           imagePullPolicy: {{ .Values.dbInit.image.pullPolicy }}
           workingDir: /migrations
-          command:
-            - atlas
+          # No command override — run the image's `atlas` entrypoint with args only
+          # (overriding command to "atlas" looks it up in PATH and fails).
           args:
             - migrate
             - apply
@@ -82,6 +110,11 @@ spec:
                   key: DB_PASSWORD
             - name: ATLAS_DB_URL
               value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable"
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml .Values.dbInit.resources | nindent 12 }}
           securityContext:
