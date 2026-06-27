@@ -21,12 +21,21 @@ name: Promote to prod
 # floci is at localhost:4566 and `docker exec` reaches the prod k3s container.
 
 on:
+  # PROD is manual. Two ways to launch it:
+  #  - workflow_dispatch (the UI "Run workflow" button) — on Gitea >= 1.24 also
+  #    via the API; pass an optional `tag`.
+  #  - pushing a `promote-*` git tag — works on Gitea 1.22 (which has no
+  #    workflow-dispatch API). `task gitea:promote` pushes it; the image tag is
+  #    taken from the git tag name (promote-<tag>), else the current dev tag.
   workflow_dispatch:
     inputs:
       tag:
         description: "Image tag to promote (default: current dev tag)"
         required: false
         default: ""
+  push:
+    tags:
+      - "promote-*"
 
 concurrency:
   group: promote
@@ -57,6 +66,8 @@ jobs:
       STATE_KEY: prod/terraform.tfstate
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: ./.gitea/actions/setup-lab
 
@@ -97,6 +108,8 @@ jobs:
       LOCAL_GITOPS_DIR: /opt/local-gitops
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: ./.gitea/actions/setup-lab
 
@@ -104,12 +117,19 @@ jobs:
         id: vars
         run: |
           set -euo pipefail
+          # 1) workflow_dispatch input (newer Gitea / UI).
           tag="${{ github.event.inputs.tag }}"
-          if [ -z "$tag" ]; then
+          # 2) tag-push trigger: image tag encoded in the git tag name (promote-<tag>).
+          if [ -z "$tag" ] && [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            ref="${GITHUB_REF_NAME:-}"
+            case "$ref" in promote-*) tag="${ref#promote-}" ;; esac
+          fi
+          # 3) fallback: whatever dev currently runs.
+          if [ -z "$tag" ] || [ "$tag" = "latest" ]; then
             tag="$(yq '.image.tag' infra/k8s/helm/values-dev.yaml)"
           fi
           if [ -z "$tag" ] || [ "$tag" = "null" ]; then
-            echo "no tag to promote (pass one or run CD on dev first)" >&2
+            echo "no tag to promote (pass one or run dev CD first)" >&2
             exit 1
           fi
           echo "Promoting tag: $tag"

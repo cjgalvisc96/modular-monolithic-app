@@ -620,23 +620,24 @@ tasks:
         echo "▶ watch: {{.GITEA_WEB}}/${ns}/${repo}/actions"
 
   gitea:promote:
-    desc: 'Launch the PROD(MANUAL) promote.yml workflow on lab Gitea (TAG=<image tag>; default = current dev tag)'
+    desc: 'Launch the PROD(MANUAL) promote.yml workflow by pushing a promote-* tag to lab Gitea (TAG=<image tag>; default = current dev tag)'
     vars:
-      TAG: '{{.TAG | default ""}}'
+      # Gitea 1.22 has no workflow-dispatch API, so we trigger promote.yml via a
+      # tag push. The image tag is encoded in the git tag name; "latest" tells
+      # the workflow to fall back to whatever dev currently runs.
+      TAG: '{{.TAG | default "latest"}}'
     cmds:
       - |
         set -e
-        echo "dispatching promote.yml (tag='{{.TAG}}'{{if eq .TAG ""}} = current dev tag{{end}}) -> {{.GITEA_NS}}/{{.GITEA_REPO_NAME}}:{{.GITEA_BRANCH}}"
-        code=$(curl -s -o /dev/null -w "%{http_code}" -u {{.GITEA_USER}}:{{.GITEA_PASSWORD}} -X POST \
-          "{{.GITEA_WEB}}/api/v1/repos/{{.GITEA_NS}}/{{.GITEA_REPO_NAME}}/actions/workflows/promote.yml/dispatches" \
-          -H 'Content-Type: application/json' \
-          -d '{"ref":"{{.GITEA_BRANCH}}","inputs":{"tag":"{{.TAG}}"}}')
-        case "$code" in
-          204) echo "✅ promote.yml dispatched" ;;
-          404) echo "ERROR: promote.yml not found on {{.GITEA_BRANCH}} (ship it first?) or Actions disabled on the repo" >&2; exit 1 ;;
-          422) echo "ERROR: HTTP 422 — bad ref/inputs (is {{.GITEA_BRANCH}} the default branch with promote.yml?)" >&2; exit 1 ;;
-          *)   echo "ERROR: unexpected HTTP $code dispatching promote.yml (is the lab up?)" >&2; exit 1 ;;
-        esac
+        host="{{.GITEA_WEB}}"; host="${host#http://}"; host="${host#https://}"
+        url="http://{{.GITEA_USER}}:{{.GITEA_PASSWORD}}@${host}/{{.GITEA_NS}}/{{.GITEA_REPO_NAME}}.git"
+        gittag="promote-{{.TAG}}"
+        # Point the tag at Gitea's current main (not local HEAD), so no stray
+        # local commits leak and promote.yml runs against the live main.
+        git fetch -q "$url" "{{.GITEA_BRANCH}}" || { echo "could not reach Gitea {{.GITEA_NS}}/{{.GITEA_REPO_NAME}} — is the lab up + repo shipped?" >&2; exit 1; }
+        echo "promoting (image tag '{{.TAG}}'{{if eq .TAG "latest"}} = current dev tag{{end}}) via tag '$gittag'"
+        git push -f "$url" "FETCH_HEAD:refs/tags/${gittag}"
+        echo "✅ pushed ${gittag} — promote.yml triggered"
         echo "▶ watch: {{.GITEA_WEB}}/{{.GITEA_NS}}/{{.GITEA_REPO_NAME}}/actions"
 
   gitea:runs:
