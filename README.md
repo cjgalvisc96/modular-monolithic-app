@@ -45,7 +45,7 @@ A single `task docker:up` gives a fully provisioned, migrated, seeded, host-reac
 | `src/todo_app/presentation/` | `api/` (FastAPI) and `cli/` (Typer) — call application use cases only |
 | `src/todo_app/scripts/` | One-shot ops entry points (e.g. the demo-data seeder) |
 | `migrations/` | Atlas migrations + RLS policies |
-| `tests/` | unit / integration / e2e / architecture |
+| `tests/` | unit / integration / architecture |
 | `infra/` | Helm (`k8s/helm`), GitOps (`k8s/gitops`), local datastores (`k8s/dependencies`), Terraform + Terragrunt |
 | `observability/` | OTel collector config + Grafana dashboards |
 | `docs/` | MkDocs site |

@@ -19,36 +19,44 @@ Every workflow targets a host **`act_runner`** registered with the label `lab`. 
 - `kind load docker-image` reaches the `kind` node containers directly;
 - `uv` and `task` are pinned to the same versions the `local-gitops` lab pins (`mise.toml`).
 
-## Four workflows
+## Three workflows
 
 | Workflow | Trigger | What it does | Touches |
 |---|---|---|---|
-| `ci.yml` | push / PR to `main` | Quality gates + coverage on a real Postgres | nothing (gate only) |
+| `ci-cd.yml` → job `ci` | push / PR to `main` | Quality gates + coverage (unit + integration; no Postgres) | nothing (gate only) |
+| `ci-cd.yml` → job `cd` | push to `main`, **after `ci` passes** | Build → push to floci ECR → `kind load` → bump `values-dev.yaml` | **dev** |
 | `tf-floci.yml` | push to `main` (`infra/terraform/local/**`) or manual | `terraform apply` the floci stack — ECR repo + SSM params | **floci infra** |
-| `cd.yml` | push to `main` | Build → push to floci ECR → `kind load` → bump `values-dev.yaml` | **dev** |
 | `promote.yml` | manual (`workflow_dispatch`) | Re-tag a dev-proven image → `kind load` → bump `values-prod.yaml` | **prod** |
 
-The dependency order is **infra → build/push → promote**: `tf-floci` provisions the
-`gitops/todo-app` ECR repo `cd.yml` pushes to and the `/gitops/<env>/todo-app/*` SSM params the
-app's `ExternalSecret` reads. The `local-gitops` `install.sh` applies the **same** Terraform stack at
+**CI gates CD in one workflow.** `ci` and `cd` live in the *same* `ci-cd.yml`, and `cd` declares
+`needs: ci` — so the build/push/deploy never runs unless lint, types, dead-code, architecture and the
+coverage suite pass first. This is expressed as a job dependency (not two separate workflows) because
+the lab's Gitea (1.22) has no reliable cross-workflow `workflow_run` trigger; a single workflow with
+`needs:` is the portable way to order them. `cd` is further gated to `push` events
+(`if: github.event_name == 'push'`), so PRs run only `ci`.
+
+The infra dependency is **infra → build/push → promote**: `tf-floci` provisions the
+`gitops/todo-app` ECR repo `cd` pushes to and the `/gitops/<env>/todo-app/*` SSM params the app's
+`ExternalSecret` reads. The `local-gitops` `install.sh` applies the **same** Terraform stack at
 bootstrap, so a fresh lab already has the infra; `tf-floci` is for ongoing changes. Both share state
 in floci S3, so neither re-creates the other's resources.
 
-### `ci.yml` — quality gate
+### `ci` job — quality gate
 
-Runs on pushes and PRs to `main` (scoped to `src/`, `tests/`, `migrations/`, `pyproject.toml`,
-`uv.lock`, and the workflow itself). After `uv sync` it runs, in order:
+Runs on pushes and PRs to `main`. After `uv sync` it runs, in order:
 
 1. `task check:linter` (ruff)
 2. `task check:types` (pyright)
 3. `task check:deadcode` (vulture)
 4. `task check:architecture` (import-linter contracts)
-5. Starts a **real PostgreSQL** (`postgres:16-alpine` on `:55432`, exposed via `TEST_DATABASE_URL`)
-6. `task test:coverage` — the full suite at the **≥ 97 %** gate
+5. `task test:coverage` — unit + integration at the **≥ 97 %** gate
 
-Because a real Postgres is up, the **RLS isolation test runs for real** (it cannot run on SQLite —
-see [Testing](../development/testing.md)). `concurrency` cancels superseded runs per ref; the job is
-read-only (`permissions: contents: read`).
+**No PostgreSQL or Docker is needed.** The suite is unit + integration only: the integration tier runs
+on throwaway SQLite, and the RLS isolation test **self-skips** when `TEST_DATABASE_URL` is unset (it
+cannot run on SQLite — see [Testing](../development/testing.md)). The FastAPI presentation layer is
+covered by pure-unit tests that call handlers/middleware directly, so coverage holds at ≥ 97 % without
+a live app or database. `concurrency` cancels superseded `ci` runs per ref. Prove tenant isolation by
+running the suite against a real Postgres locally (`TEST_DATABASE_URL=… task test:integration`).
 
 ### `tf-floci.yml` — infrastructure (floci)
 
@@ -65,15 +73,14 @@ datastores; in the `kind` lab those are unused and may no-op). Runs on push to `
    applies the **same** stack at bootstrap — share one state and don't fight over resources.
 
 Because `install.sh` seeds at bootstrap, you normally only run this manually for an infra change. Run
-it (or install) **before** the first `cd.yml`, or the app deploys but stays un-Healthy until the SSM
+it (or install) **before** the first `cd` deploy, or the app deploys but stays un-Healthy until the SSM
 params exist.
 
-### `cd.yml` — continuous deploy to dev
+### `cd` job — continuous deploy to dev
 
-Runs on every push to `main` that touches image-affecting paths (`src/`, `migrations/`,
-`Dockerfile`, `pyproject.toml`, `uv.lock`, the workflow, and the `setup-lab` action). The
-`values-dev.yaml` bump it commits is **deliberately excluded** from the trigger paths, so the deploy
-commit cannot re-trigger the workflow. Steps:
+Runs **only after `ci` passes** (`needs: ci`) and **only on pushes** to `main`. The `values-dev.yaml`
+bump it commits is excluded from the workflow's trigger paths *and* carries `[skip ci]` (which Gitea
+honours), so the deploy commit cannot re-trigger the pipeline. Steps:
 
 1. **Resolve tag** — `git rev-parse --short HEAD`.
 2. **Build** the prod image — `docker build --target prod -t local/todo-app:<tag>`.
@@ -93,7 +100,7 @@ A `workflow_dispatch` job — **the only path that changes prod**. It takes a `t
 dev (defaulting to whatever `values-dev.yaml` currently points at) and does **no build**:
 
 1. **Ensure the image is local** — if the dev build host has since pruned it, pull it back from the
-   floci ECR (the artifact built by `cd.yml` lives there).
+   floci ECR (the artifact built by the `cd` job lives there).
 2. **`kind load`** it into the **prod** cluster.
 3. **Bump and commit** `values-prod.yaml` → `ci: promote <tag> to prod [skip ci]` → push.
 
@@ -102,9 +109,9 @@ rebuilt.
 
 ### `setup-lab` composite action
 
-`cd.yml` and `promote.yml` share `.gitea/actions/setup-lab`, which installs the pinned CLIs the lab
-jobs need — **kind**, **yq**, **aws** (`docker` and `git` already ship in the job image), versioned
-to track the lab.
+The `cd` job and `promote.yml` share `.gitea/actions/setup-lab`, which installs the pinned CLIs the
+lab jobs need — **kind**, **yq**, **aws** (`docker` and `git` already ship in the job image),
+versioned to track the lab.
 
 ## The full loop (merge an MR → live on dev)
 
@@ -113,9 +120,12 @@ infra first: install.sh (bootstrap) or tf-floci ... terraform apply → ECR repo
 
 merge to main
    │
-   ├─ ci.yml ........ ruff · pyright · vulture · import-linter · coverage≥97% (real Postgres → RLS runs)
+   ci-cd.yml
    │
-   └─ cd.yml ........ build (--target prod)
+   ├─ job ci ........ ruff · pyright · vulture · import-linter · coverage≥97% (unit+integration, no Postgres)
+   │       │
+   │       ▼ needs: ci  (deploy only if ci is green)
+   └─ job cd ........ build (--target prod)
                       → docker push  → floci ECR  (gitops/todo-app, registry of record)
                       → kind load    → dev cluster
                       → yq bump values-dev.yaml → commit "[skip ci]" → push main

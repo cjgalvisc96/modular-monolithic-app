@@ -7,28 +7,29 @@ must be exercised.
 
 ```mermaid
 flowchart TB
-    E2E["e2e — ~1%<br/>full API flow: auth → create → read → update → soft-delete"]
     INT["integration — ~10%<br/>real repositories + DB; RLS isolation test"]
-    UNIT["unit — bulk<br/>domain + use cases with in-memory fakes"]
+    UNIT["unit — bulk<br/>domain + use cases + presentation, via in-memory fakes"]
     ARCH["architecture — import-linter<br/>layer + context boundary contracts"]
-    UNIT --> INT --> E2E
+    UNIT --> INT
     ARCH -.enforces boundaries.-> UNIT
 ```
 
 ## The tiers
 
-- **Unit** (`tests/unit/{users,tasks,ai,shared}/`) — the bulk of the suite, with a **100% coverage
-  target** per context. Domain logic and use cases are tested in isolation. Use cases run against
-  **in-memory fakes** of repository/port interfaces — no DB, no AWS, no FastAPI. The `ai` context
-  uses a **fake `LlmClient`**; there are **no live Bedrock calls** in this tier.
-- **Integration** (`tests/integration/{users,tasks,ai}/`) — ~10% of the suite. Repository and
-  DB-level tests using real repository implementations. Includes the **RLS isolation test**
-  (below).
-- **End-to-end** (`tests/e2e/`) — ~1% of the suite. Full API flows: authenticate, create, read,
-  update, soft-delete, across contexts.
+- **Unit** (`tests/unit/`) — the bulk of the suite, with a **100% coverage target** per context.
+  Domain logic and use cases are tested in isolation against **in-memory fakes** of repository/port
+  interfaces — no DB, no AWS, no FastAPI. The **presentation layer** (`tests/unit/presentation/`) is
+  covered here too, by **calling route handlers, middleware and serializers directly** with fakes —
+  no running app, HTTP client, or database. The `ai` context uses a **fake `LlmClient`**; there are
+  **no live Bedrock calls** in this tier.
+- **Integration** (`tests/integration/`) — ~10% of the suite. Repository and DB-level tests using
+  real repository implementations. Includes the **RLS isolation test** (below).
 - **Architecture** (`tests/architecture/`) — `import-linter`-backed tests asserting layer
   boundaries and context isolation, including the rule that only `container.py` may import across
   all three layers of a context. See [Governance](governance.md).
+
+There is **no separate end-to-end/HTTP tier**: the API surface is exercised at the unit level by
+direct handler invocation, which keeps the whole suite **Postgres- and Docker-free** in CI.
 
 ## The RLS isolation test (needs real Postgres)
 

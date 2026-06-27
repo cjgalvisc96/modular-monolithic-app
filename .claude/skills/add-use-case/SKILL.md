@@ -83,7 +83,9 @@ ports. If it uses a cross-context port, ensure that port is passed in from the r
 
 - **Unit** (`tests/unit/<context>/`) — exercise the use case with **in-memory fakes** of its ports
   (and a fake `LlmClient` for `ai`). Cover happy path, edge cases, and errors.
-- **E2E** (if it adds a notable API flow) — extend `tests/e2e/`.
+- **Presentation** (if it adds/changes an API route) — add a unit test in
+  `tests/unit/presentation/` that **calls the handler directly** with the fakes in
+  `tests/support/api_fakes.py` (no app, no HTTP client, no DB). There is no `tests/e2e/` tier.
 - Maintain coverage **≥ 97%**.
 
 ## Verify

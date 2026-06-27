@@ -57,7 +57,7 @@ Because the adapter is the sole AWS-aware component:
 - It can be swapped (a different model, a different provider) without touching domain or
   application code.
 - It is mocked in tests with a fake `LlmClient` — **no live Bedrock calls** in the unit or
-  integration tiers. Live invocation is confined to a gated e2e/smoke suite. See
+  integration tiers. Live invocation is confined to a gated smoke suite. See
   [Testing](../development/testing.md).
 
 ## Persisted `AiSuggestion`

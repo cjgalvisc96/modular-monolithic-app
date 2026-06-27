@@ -126,20 +126,15 @@ tasks:
     cmds:
       - "{{.PY}} pytest tests/integration"
 
-  test:e2e:
-    desc: Run the end-to-end API suite
-    cmds:
-      - "{{.PY}} pytest tests/e2e"
-
   test:all:
-    desc: Run the entire test suite (unit + integration + e2e + architecture)
+    desc: Run the entire test suite (unit + integration + architecture)
     cmds:
       - "{{.PY}} pytest"
 
   test:coverage:
-    desc: Run unit + integration + e2e with coverage (>=97% enforced)
+    desc: Run unit + integration with coverage (>=97% enforced)
     cmds:
-      - "{{.PY}} pytest tests/unit tests/integration tests/e2e --cov --cov-report=term-missing"
+      - "{{.PY}} pytest tests/unit tests/integration --cov --cov-report=term-missing"
 
   # --- clean ----------------------------------------------------------------
   clean:cache:

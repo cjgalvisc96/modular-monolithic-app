@@ -1,0 +1,142 @@
+name: CI/CD
+
+# One pipeline so deploys are gated on green checks: the `cd` job `needs: ci`,
+# so the build/push/deploy never runs unless lint, types, architecture and the
+# coverage suite pass first. (Gitea 1.22 has no cross-workflow `workflow_run`,
+# so ordering is expressed as job dependencies in a single workflow.)
+#
+# CI runs on pushes and PRs to main. CD runs only on pushes to main, after CI.
+# No PostgreSQL/Docker is needed for the tests: the suite is unit + integration
+# (integration on SQLite; the RLS isolation test self-skips without
+# TEST_DATABASE_URL). The values-dev.yaml bump CD commits carries [skip ci]
+# (honoured by Gitea), so it never re-triggers the pipeline.
+#
+# Both jobs run on the host act_runner (runs-on: lab): host networking + the
+# host docker daemon, so floci is at localhost:4566 and `kind load` reaches the
+# kind node containers directly. PROD is never touched here — see promote.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "migrations/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".gitea/workflows/ci-cd.yml"
+      - ".gitea/actions/setup-lab/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "migrations/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".gitea/workflows/ci-cd.yml"
+
+permissions:
+  contents: write
+
+env:
+  UV_VERSION: "0.11.19"
+  TASK_VERSION: "v3.40.1"
+
+jobs:
+  ci:
+    runs-on: lab
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and task (pinned)
+        run: |
+          set -euo pipefail
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          sh -c "$(curl -fsSL https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin "$TASK_VERSION"
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Lint (ruff)
+        run: task check:linter
+
+      - name: Types (pyright)
+        run: task check:types
+
+      - name: Dead code (vulture)
+        run: task check:deadcode
+
+      - name: Architecture (import-linter)
+        run: task check:architecture
+
+      - name: Tests + coverage (>=97%)
+        # unit + integration only; integration runs on SQLite and the RLS test
+        # self-skips without TEST_DATABASE_URL, so no PostgreSQL is required.
+        run: task test:coverage
+
+  cd:
+    # Deploy to DEV only after CI passes, and only on pushes to main.
+    needs: ci
+    if: ${{ github.event_name == 'push' }}
+    runs-on: lab
+    concurrency:
+      group: cd-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      APP_IMAGE: local/todo-app
+      ECR_REPO: gitops/todo-app
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localhost:4566
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.gitea/actions/setup-lab
+
+      - name: Resolve image tag
+        id: vars
+        run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build prod image
+        run: docker build --target prod -t "$APP_IMAGE:${{ steps.vars.outputs.tag }}" .
+
+      - name: Push to floci ECR
+        run: |
+          set -euo pipefail
+          tag="${{ steps.vars.outputs.tag }}"
+          aws --endpoint-url "$AWS_ENDPOINT_URL" ecr describe-repositories --repository-names "$ECR_REPO" >/dev/null 2>&1 \
+            || aws --endpoint-url "$AWS_ENDPOINT_URL" ecr create-repository --repository-name "$ECR_REPO" >/dev/null
+          REPO_URI=$(aws --endpoint-url "$AWS_ENDPOINT_URL" ecr describe-repositories \
+            --repository-names "$ECR_REPO" --query 'repositories[0].repositoryUri' --output text)
+          aws --endpoint-url "$AWS_ENDPOINT_URL" ecr get-login-password \
+            | docker login --username AWS --password-stdin "${REPO_URI%%/*}"
+          docker tag "$APP_IMAGE:$tag" "$REPO_URI:$tag"
+          docker push "$REPO_URI:$tag"
+
+      - name: Load image into the dev cluster
+        run: kind load docker-image "$APP_IMAGE:${{ steps.vars.outputs.tag }}" --name dev
+
+      - name: Bump values-dev.yaml and commit
+        run: |
+          set -euo pipefail
+          tag="${{ steps.vars.outputs.tag }}"
+          yq -i ".image.tag = \"$tag\"" infra/k8s/helm/values-dev.yaml
+          if git diff --quiet -- infra/k8s/helm/values-dev.yaml; then
+            echo "values-dev.yaml already at $tag — nothing to commit"
+            exit 0
+          fi
+          git config user.name "gitea-actions"
+          git config user.email "actions@gitops.local"
+          git add infra/k8s/helm/values-dev.yaml
+          git commit -m "ci: deploy $tag to dev [skip ci]"
+          scheme="${GITHUB_SERVER_URL%%://*}"
+          host="${GITHUB_SERVER_URL#*://}"
+          git push "${scheme}://x-access-token:${{ github.token }}@${host}/${GITHUB_REPOSITORY}.git" HEAD:main

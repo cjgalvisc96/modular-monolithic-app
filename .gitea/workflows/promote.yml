@@ -7,7 +7,7 @@ name: Promote to prod
 # bumps infra/k8s/helm/values-prod.yaml and commits. Argo CD on prod syncs.
 #
 # This is the only path that changes prod. No build happens here — the artifact
-# was built by cd.yml and lives in the floci ECR.
+# was built by the cd job in ci-cd.yml and lives in the floci ECR.
 
 on:
   workflow_dispatch:
