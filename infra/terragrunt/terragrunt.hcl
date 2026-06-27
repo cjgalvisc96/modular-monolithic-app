@@ -62,8 +62,8 @@ ${local.floci_endpoints_block}
 }
 
 # Remote state: real AWS uses a versioned, encrypted S3 bucket + DynamoDB lock.
-# floci uses a local state file (the workflow syncs it to/from floci S3 between
-# runs, like tf-floci.yml) — terragrunt's S3 backend bootstrap doesn't honour
+# floci uses a local state file (the ci-cd/promote pipelines sync it to/from
+# floci S3 between runs) — terragrunt's S3 backend bootstrap doesn't honour
 # custom endpoints, so a local backend is the reliable choice for floci.
 remote_state {
   backend = local.floci ? "local" : "s3"

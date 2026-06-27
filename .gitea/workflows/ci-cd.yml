@@ -196,3 +196,11 @@ jobs:
           scheme="${GITHUB_SERVER_URL%%://*}"
           host="${GITHUB_SERVER_URL#*://}"
           git push "${scheme}://x-access-token:${{ github.token }}@${host}/${GITHUB_REPOSITORY}.git" HEAD:main
+
+      - name: Handoff to PROD (manual)
+        # DEV is green. PROD is the manual gate: launch the "Promote to prod"
+        # workflow (terraform prod -> CD-to-EKS prod) when you're ready.
+        run: |
+          echo "✅ DEV deployed to floci-EKS (tag ${{ steps.vars.outputs.tag }})."
+          echo "▶ PROMOTE TO PROD (manual): ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions  →  'Promote to prod'  →  Run workflow"
+          echo "  (or: the promote.yml workflow_dispatch — provisions prod infra then deploys via the in-EKS Argo)"
