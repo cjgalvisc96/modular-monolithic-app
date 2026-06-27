@@ -90,7 +90,7 @@ Installed by `uv` as console scripts (used by the container and locally):
 | `check:quality` | ruff + pyright + vulture + coverage gate (≥ 97%) |
 | `check:architecture` | import-linter contracts (layers + context boundaries) |
 | `test:unit` / `test:integration` / `test:coverage` | test pyramid |
-| `docker:up` / `docker:down` / `docker:prune` / `docker:verify` | local stack lifecycle |
+| `docker:up` / `docker:down` / `prune` / `docker:verify` | local stack lifecycle |
 | `docker:shell` / `docker:logs` | shell / logs in the running stack |
 | `atlas:migrate` / `atlas:status` / `atlas:new` / `atlas:hash` | DB migrations (Atlas) |
 | `seed:demo` | re-run the demo-data seeder |

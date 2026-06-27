@@ -22,6 +22,16 @@ vars:
   FLOCI_ENDPOINT: '{{.FLOCI_ENDPOINT | default "http://localhost:4576"}}'
   # The local-gitops platform's floci (shared across apps) listens on :4566.
   GITOPS_FLOCI_ENDPOINT: '{{.GITOPS_FLOCI_ENDPOINT | default "http://localhost:4566"}}'
+  # --- local-gitops Gitea (push target for the local CI/CD pipeline) ---
+  # Lab defaults from local-gitops/lib/common.sh; override via env for other labs.
+  GITEA_WEB: '{{.GITEA_WEB | default "http://gitea.dev.local"}}'
+  # The 'gitops' org is what install.sh creates and Argo watches (matches the
+  # repoURL in infra/k8s/gitops/applications/*). Override GITEA_NS for another.
+  GITEA_NS: '{{.GITEA_NS | default "gitops"}}'
+  GITEA_REPO_NAME: '{{.GITEA_REPO_NAME | default "modular-monolithic-app"}}'
+  GITEA_BRANCH: '{{.GITEA_BRANCH | default "main"}}'
+  GITEA_USER: '{{.GITEA_USER | default "adminlocal"}}'
+  GITEA_PASSWORD: '{{.GITEA_PASSWORD | default "adminlocal1"}}'
   ECR_REPO: '{{.ECR_REPO | default "todo-app"}}'
   ECR_REGISTRY: '{{.ECR_REGISTRY | default ""}}'
   IMAGE_TAG: '{{.IMAGE_TAG | default "dev"}}'
@@ -394,6 +404,48 @@ tasks:
     cmds:
       - AWS_PROFILE={{.AWS_PROFILE_NAME}} AWS_ENDPOINT_URL={{.GITOPS_FLOCI_ENDPOINT}} ./infra/k8s/gitops/floci-seed.sh
 
+  # --- local CI/CD loop (push to lab Gitea; no reinstall) -------------------
+  gitea:ship:
+    desc: 'Push the current commit to lab Gitea {{.GITEA_NS}}/{{.GITEA_REPO_NAME}}:{{.GITEA_BRANCH}} to trigger the pipeline (no reinstall)'
+    cmds:
+      - |
+        set -e
+        host="{{.GITEA_WEB}}"; host="${host#http://}"; host="${host#https://}"
+        ns="{{.GITEA_NS}}"; repo="{{.GITEA_REPO_NAME}}"; br="{{.GITEA_BRANCH}}"
+        if ! git diff --quiet || ! git diff --cached --quiet; then
+          echo "WARNING: uncommitted changes — the pipeline builds from the committed HEAD." >&2
+          echo "         Commit first (git commit -am ...) so your change is what gets tested." >&2
+        fi
+        sha="$(git rev-parse --short HEAD)"
+        echo "shipping ${sha} ($(git rev-parse --abbrev-ref HEAD)) -> ${ns}/${repo}:${br}"
+        git push -f "http://{{.GITEA_USER}}:{{.GITEA_PASSWORD}}@${host}/${ns}/${repo}.git" "HEAD:${br}"
+        echo "▶ watch: {{.GITEA_WEB}}/${ns}/${repo}/actions"
+
+  gitea:runs:
+    desc: 'Show recent Gitea Actions runs for the lab repo (falls back to the UI on Gitea < 1.23)'
+    cmds:
+      - |
+        api="{{.GITEA_WEB}}/api/v1/repos/{{.GITEA_NS}}/{{.GITEA_REPO_NAME}}/actions/tasks"
+        ui="{{.GITEA_WEB}}/{{.GITEA_NS}}/{{.GITEA_REPO_NAME}}/actions"
+        curl -s -u {{.GITEA_USER}}:{{.GITEA_PASSWORD}} "$api" | UI="$ui" python3 -c '
+        import sys, json, os
+        try:
+            d = json.loads(sys.stdin.read())
+            runs = d.get("workflow_runs") or d.get("tasks") or []
+        except Exception:
+            runs = None
+        if runs is None:
+            print("Actions run-listing API unavailable on this Gitea (< 1.23) — watch in the UI:")
+            print(os.environ["UI"])
+        elif not runs:
+            print("(no runs yet)  " + os.environ["UI"])
+        else:
+            for t in runs[:10]:
+                wf = t.get("name") or t.get("workflow_id") or "?"
+                num = t.get("run_number", t.get("id", "?"))
+                print("%-9s %-10s %s  #%s" % (t.get("status", "?"), t.get("conclusion", "") or "-", wf, num))
+        '
+
   floci:wait-datastores:
     desc: 'Wait until the floci-provisioned Aurora backing accepts connections (fails loudly if not)'
     preconditions:
@@ -511,7 +563,7 @@ tasks:
       - "{{.COMPOSE}} down"
       - task: clean:cache
 
-  docker:prune:
+  prune:
     desc: Remove ALL todo-app docker resources — containers, images, volumes, networks (keeps local-gitops)
     cmds:
       - "{{.COMPOSE}} down -v --remove-orphans 2>/dev/null || true"
