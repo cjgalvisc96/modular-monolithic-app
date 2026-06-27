@@ -6,6 +6,9 @@ metadata:
   labels:
     {{- include "todo-app.api.selectorLabels" . | nindent 4 }}
     {{- include "todo-app.labels" . | nindent 4 }}
+  annotations:
+    # Wave 2: roll out only AFTER the db-init Job (wave 1) has migrated the DB.
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}

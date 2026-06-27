@@ -6,10 +6,13 @@ It is a SEPARATE workload from the API Deployment (decoupled): the API
 container never runs migrations on startup, which avoids migration races
 when multiple replicas boot at once.
 
-Delivered as a Helm hook:
-  - pre-install,pre-upgrade : runs before the chart's normal resources apply
-  - hook-weight "0"         : after the hook-managed ServiceAccount (weight -10)
-  - hook-delete-policy      : clean up the previous Job, and the succeeded Job
+Ordered with Argo CD sync-waves (not Helm hooks) so it works under GitOps:
+  - sync-wave "1"  : runs AFTER the ConfigMap/Secret/ExternalSecret (wave 0), so
+                     the DB creds (incl. the ESO-materialized Secret, which Argo
+                     waits to be Ready before this wave) exist when it runs, and
+                     BEFORE the API Deployment (wave 2).
+  - Replace=true   : a completed Job is immutable; replace it each sync so the
+                     migration re-runs cleanly (Atlas is idempotent).
 */ -}}
 apiVersion: batch/v1
 kind: Job
@@ -20,9 +23,8 @@ metadata:
     {{- include "todo-app.labels" . | nindent 4 }}
     app.kubernetes.io/component: db-init
   annotations:
-    "helm.sh/hook": pre-install,pre-upgrade
-    "helm.sh/hook-weight": "0"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: Replace=true
 spec:
   backoffLimit: {{ .Values.dbInit.backoffLimit }}
   activeDeadlineSeconds: {{ .Values.dbInit.activeDeadlineSeconds }}

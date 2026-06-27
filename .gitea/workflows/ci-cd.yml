@@ -1,9 +1,11 @@
 name: CI/CD
 
-# One pipeline so deploys are gated on green checks: the `cd` job `needs: ci`,
-# so the build/push/deploy never runs unless lint, types, architecture and the
-# coverage suite pass first. (Gitea 1.22 has no cross-workflow `workflow_run`,
-# so ordering is expressed as job dependencies in a single workflow.)
+# One pipeline, ordered by job dependencies: ci -> seed-floci -> cd. Deploys are
+# gated on green checks (cd needs ci, transitively) AND on floci being seeded
+# (cd needs seed-floci) — so the build/push/deploy never runs unless lint, types,
+# architecture and coverage pass first, and the ECR repo + SSM params the app
+# needs already exist. (Gitea 1.22 has no cross-workflow `workflow_run`, so the
+# ci/seed/cd ordering must be job dependencies in a single workflow.)
 #
 # CI runs on every push (and PR) to main. CD runs only on pushes to main, after
 # CI. There is deliberately NO `paths:` filter on the push trigger: in the lab,
@@ -69,9 +71,34 @@ jobs:
         # self-skips without TEST_DATABASE_URL, so no PostgreSQL is required.
         run: task test:coverage
 
-  cd:
-    # Deploy to DEV only after CI passes, and only on pushes to main.
+  seed-floci:
+    # Provision the floci infra the deploy depends on, BEFORE building: the ECR
+    # repo the image is pushed to, and the SSM params (/gitops/<env>/todo-app/*)
+    # the app's ExternalSecret reads for DB/Redis creds. Idempotent — same values
+    # every run, for dev AND prod. Push-only (PRs stop at ci).
     needs: ci
+    if: ${{ github.event_name == 'push' }}
+    runs-on: lab
+    env:
+      AWS_ENDPOINT_URL: http://localhost:4566
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.gitea/actions/setup-lab     # installs the aws CLI
+
+      - name: Seed floci (ECR repo + SSM params for dev/prod)
+        run: |
+          set -euo pipefail
+          # floci-seed.sh expects an AWS profile named 'floci' (floci creds = test/test).
+          aws configure set aws_access_key_id     test       --profile floci
+          aws configure set aws_secret_access_key test       --profile floci
+          aws configure set region                us-east-1  --profile floci
+          AWS_PROFILE=floci ./infra/k8s/gitops/floci-seed.sh
+
+  cd:
+    # Deploy to DEV only after CI passes AND floci is seeded, on pushes to main.
+    needs: seed-floci
     if: ${{ github.event_name == 'push' }}
     runs-on: lab
     concurrency:

@@ -201,7 +201,9 @@ dbInit:
   enabled: true
   image:
     repository: arigaio/atlas
-    tag: "0.21.1"
+    # Match local dev (Taskfile / docker-compose use arigaio/atlas:latest). The
+    # previously pinned "0.21.1" tag was never published on Docker Hub → ErrImagePull.
+    tag: "latest"
     pullPolicy: IfNotPresent
   atlasEnv: dev
   backoffLimit: 3
