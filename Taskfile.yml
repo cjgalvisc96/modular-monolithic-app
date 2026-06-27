@@ -239,9 +239,7 @@ tasks:
       - sh: command -v trivy
         msg: "Trivy not found. Install: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin"
     cmds:
-      # Skip infra/terraform/local — the floci stack is deliberately un-hardened
-      # (no KMS/encryption/lifecycle) for emulator compatibility; it never ships.
-      - trivy config --severity HIGH,CRITICAL --exit-code 1 --ignorefile {{.TF_DIR}}/.trivyignore --skip-dirs {{.TF_DIR}}/local {{.TF_DIR}}
+      - trivy config --severity HIGH,CRITICAL --exit-code 1 --ignorefile {{.TF_DIR}}/.trivyignore {{.TF_DIR}}
 
   terraform:costs:
     desc: 'Infracost estimate for an environment (ENV=dev|prod). First run prompts a free login.'
@@ -528,40 +526,6 @@ tasks:
         aws configure set region {{.AWS_REGION}}           --profile {{.AWS_PROFILE_NAME}}
         aws configure set output json                      --profile {{.AWS_PROFILE_NAME}}
 
-  floci:seed:
-    desc: 'Seed floci (local AWS) with the ECR repo + SSM params the app/GitOps consume'
-    deps: [aws:profile]
-    cmds:
-      - |
-        set -euo pipefail
-        export AWS_PROFILE={{.AWS_PROFILE_NAME}}
-        EP="--endpoint-url {{.FLOCI_ENDPOINT}}"
-        # Wait for floci to answer before seeding.
-        ready=""
-        for _ in $(seq 1 30); do
-          curl -sf "{{.FLOCI_ENDPOINT}}" >/dev/null 2>&1 && { ready=1; break; }
-          sleep 2
-        done
-        if [ -z "$ready" ]; then
-          echo "floci not reachable at {{.FLOCI_ENDPOINT}} — start it (task docker:up) first." >&2
-          exit 1
-        fi
-        aws $EP ecr describe-repositories --repository-names {{.ECR_REPO}} >/dev/null 2>&1 \
-          || aws $EP ecr create-repository --repository-name {{.ECR_REPO}} >/dev/null
-        echo "ecr: {{.ECR_REPO}}"
-        for env in dev prod; do
-          pfx="/gitops/${env}/todo-app"
-          aws $EP ssm put-parameter --overwrite --type String       --name "${pfx}/DB_USER"        --value "todo"      >/dev/null
-          aws $EP ssm put-parameter --overwrite --type SecureString --name "${pfx}/DB_PASSWORD"    --value "todo"      >/dev/null
-          aws $EP ssm put-parameter --overwrite --type SecureString --name "${pfx}/REDIS_PASSWORD" --value "redispass" >/dev/null
-          echo "ssm: ${pfx}/{DB_USER,DB_PASSWORD,REDIS_PASSWORD}"
-        done
-
-  gitops:seed-floci:
-    desc: 'Seed THIS app into the local-gitops floci (SSM params + ECR repo). ENDPOINT defaults to :4566'
-    deps: [aws:profile]
-    cmds:
-      - AWS_PROFILE={{.AWS_PROFILE_NAME}} AWS_ENDPOINT_URL={{.GITOPS_FLOCI_ENDPOINT}} ./infra/k8s/gitops/floci-seed.sh
 
   # --- onboard this app into a running lab (run once, after install:app) ----
   gitea:create-repo:
