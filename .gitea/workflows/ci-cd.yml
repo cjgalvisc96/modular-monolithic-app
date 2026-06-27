@@ -175,27 +175,32 @@ jobs:
       - name: Import the image into the floci-EKS containerd
         run: task eks:load-image ENV=dev IMAGE_TAG=${{ steps.vars.outputs.tag }}
 
-      - name: Bootstrap the floci-EKS cluster (MetalLB + ingress-nginx + Argo CD + Applications)
-        # Installs the self-contained GitOps stack INTO the floci-EKS cluster and
-        # registers the repo + Applications. Idempotent: a no-op once present.
-        run: task eks:bootstrap ENV=dev
-
-      - name: Bump values-dev.yaml and commit (the in-EKS Argo syncs the new tag)
+      # Bump the tag + push BEFORE registering the Argo Applications, so the
+      # in-EKS Argo's FIRST sync already targets the loaded image (otherwise it
+      # syncs the pre-bump tag, whose image was never loaded, and wedges the
+      # db-init Job on ImagePullBackOff).
+      - name: Bump values-dev.yaml and commit (so Argo's first sync uses the loaded tag)
         run: |
           set -euo pipefail
           tag="${{ steps.vars.outputs.tag }}"
           yq -i ".image.tag = \"$tag\"" infra/k8s/helm/values-dev.yaml
           if git diff --quiet -- infra/k8s/helm/values-dev.yaml; then
             echo "values-dev.yaml already at $tag — nothing to commit"
-            exit 0
+          else
+            git config user.name "gitea-actions"
+            git config user.email "actions@gitops.local"
+            git add infra/k8s/helm/values-dev.yaml
+            git commit -m "ci: deploy $tag to dev [skip ci]"
+            scheme="${GITHUB_SERVER_URL%%://*}"
+            host="${GITHUB_SERVER_URL#*://}"
+            git push "${scheme}://x-access-token:${{ github.token }}@${host}/${GITHUB_REPOSITORY}.git" HEAD:main
           fi
-          git config user.name "gitea-actions"
-          git config user.email "actions@gitops.local"
-          git add infra/k8s/helm/values-dev.yaml
-          git commit -m "ci: deploy $tag to dev [skip ci]"
-          scheme="${GITHUB_SERVER_URL%%://*}"
-          host="${GITHUB_SERVER_URL#*://}"
-          git push "${scheme}://x-access-token:${{ github.token }}@${host}/${GITHUB_REPOSITORY}.git" HEAD:main
+
+      - name: Bootstrap the floci-EKS cluster (MetalLB + ingress-nginx + Argo CD + Applications)
+        # Installs the self-contained GitOps stack INTO the floci-EKS cluster and
+        # registers the repo + Applications. Idempotent: a no-op once present.
+        # Runs AFTER the bump so Argo's first sync points at the loaded tag.
+        run: task eks:bootstrap ENV=dev
 
       - name: Handoff to PROD (manual)
         # DEV is green. PROD is the manual gate: launch the "Promote to prod"

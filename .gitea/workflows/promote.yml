@@ -131,22 +131,24 @@ jobs:
       - name: Import the image into the floci-EKS prod containerd
         run: task eks:load-image ENV=prod IMAGE_TAG=${{ steps.vars.outputs.tag }}
 
-      - name: Bootstrap the floci-EKS prod cluster (MetalLB + ingress-nginx + Argo CD + Applications)
-        run: task eks:bootstrap ENV=prod
-
-      - name: Bump values-prod.yaml and commit (the in-EKS Argo syncs the new tag)
+      # Bump + push BEFORE registering the Argo Applications, so Argo's first
+      # sync targets the loaded tag (avoids the db-init ImagePullBackOff wedge).
+      - name: Bump values-prod.yaml and commit (so Argo's first sync uses the loaded tag)
         run: |
           set -euo pipefail
           tag="${{ steps.vars.outputs.tag }}"
           yq -i ".image.tag = \"$tag\"" infra/k8s/helm/values-prod.yaml
           if git diff --quiet -- infra/k8s/helm/values-prod.yaml; then
             echo "values-prod.yaml already at $tag — nothing to commit"
-            exit 0
+          else
+            git config user.name "gitea-actions"
+            git config user.email "actions@gitops.local"
+            git add infra/k8s/helm/values-prod.yaml
+            git commit -m "ci: promote $tag to prod [skip ci]"
+            scheme="${GITHUB_SERVER_URL%%://*}"
+            host="${GITHUB_SERVER_URL#*://}"
+            git push "${scheme}://x-access-token:${{ github.token }}@${host}/${GITHUB_REPOSITORY}.git" HEAD:main
           fi
-          git config user.name "gitea-actions"
-          git config user.email "actions@gitops.local"
-          git add infra/k8s/helm/values-prod.yaml
-          git commit -m "ci: promote $tag to prod [skip ci]"
-          scheme="${GITHUB_SERVER_URL%%://*}"
-          host="${GITHUB_SERVER_URL#*://}"
-          git push "${scheme}://x-access-token:${{ github.token }}@${host}/${GITHUB_REPOSITORY}.git" HEAD:main
+
+      - name: Bootstrap the floci-EKS prod cluster (MetalLB + ingress-nginx + Argo CD + Applications)
+        run: task eks:bootstrap ENV=prod

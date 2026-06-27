@@ -616,6 +616,26 @@ tasks:
         git push -f "http://{{.GITEA_USER}}:{{.GITEA_PASSWORD}}@${host}/${ns}/${repo}.git" "HEAD:${br}"
         echo "▶ watch: {{.GITEA_WEB}}/${ns}/${repo}/actions"
 
+  gitea:promote:
+    desc: 'Launch the PROD(MANUAL) promote.yml workflow on lab Gitea (TAG=<image tag>; default = current dev tag)'
+    vars:
+      TAG: '{{.TAG | default ""}}'
+    cmds:
+      - |
+        set -e
+        echo "dispatching promote.yml (tag='{{.TAG}}'{{if eq .TAG ""}} = current dev tag{{end}}) -> {{.GITEA_NS}}/{{.GITEA_REPO_NAME}}:{{.GITEA_BRANCH}}"
+        code=$(curl -s -o /dev/null -w "%{http_code}" -u {{.GITEA_USER}}:{{.GITEA_PASSWORD}} -X POST \
+          "{{.GITEA_WEB}}/api/v1/repos/{{.GITEA_NS}}/{{.GITEA_REPO_NAME}}/actions/workflows/promote.yml/dispatches" \
+          -H 'Content-Type: application/json' \
+          -d '{"ref":"{{.GITEA_BRANCH}}","inputs":{"tag":"{{.TAG}}"}}')
+        case "$code" in
+          204) echo "✅ promote.yml dispatched" ;;
+          404) echo "ERROR: promote.yml not found on {{.GITEA_BRANCH}} (ship it first?) or Actions disabled on the repo" >&2; exit 1 ;;
+          422) echo "ERROR: HTTP 422 — bad ref/inputs (is {{.GITEA_BRANCH}} the default branch with promote.yml?)" >&2; exit 1 ;;
+          *)   echo "ERROR: unexpected HTTP $code dispatching promote.yml (is the lab up?)" >&2; exit 1 ;;
+        esac
+        echo "▶ watch: {{.GITEA_WEB}}/{{.GITEA_NS}}/{{.GITEA_REPO_NAME}}/actions"
+
   gitea:runs:
     desc: 'Show recent Gitea Actions runs for the lab repo (falls back to the UI on Gitea < 1.23)'
     cmds:
