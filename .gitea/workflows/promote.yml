@@ -1,13 +1,24 @@
 name: Promote to prod
 
-# Manual promotion to PROD (workflow_dispatch). Takes a tag already proven on
-# dev (defaults to whatever values-dev.yaml currently points at), makes sure
-# that image exists locally — pulling it back from the floci ECR if the dev
-# build host has since pruned it — kind-loads it into the prod cluster, then
-# bumps infra/k8s/helm/values-prod.yaml and commits. Argo CD on prod syncs.
+# PROD (MANUAL) pipeline — workflow_dispatch only. Launch this by hand once the
+# DEV(AUTO) pipeline (ci-cd.yml) is green. It mirrors dev:
 #
-# This is the only path that changes prod. No build happens here — the artifact
-# was built by the cd job in ci-cd.yml and lives in the floci ECR.
+#   terraform  provision the PROD cloud on floci via Terragrunt (ENV=prod), the
+#              full infra/terragrunt/prod stack. FLOCI=true disables the modules
+#              LocalStack-community can't apply, same as dev. State persists in
+#              floci S3 between runs.
+#   cd         take a tag already proven on dev (default: whatever values-dev.yaml
+#              points at), pull it back from the floci ECR if this host pruned it,
+#              import it into the floci-EKS prod cluster, bootstrap that cluster's
+#              own GitOps stack (MetalLB + ingress-nginx + Argo CD + Applications),
+#              then bump values-prod.yaml. The in-EKS Argo syncs in-cluster.
+#
+# This is the ONLY path that changes prod. No app build happens here — the image
+# was built by ci-cd.yml's cd job and lives in the floci ECR. The manual launch
+# is the approval gate (Gitea has no environment protection rules).
+#
+# Runs on the host act_runner (runs-on: lab): host networking + host docker, so
+# floci is at localhost:4566 and `docker exec` reaches the prod k3s container.
 
 on:
   workflow_dispatch:
@@ -25,16 +36,65 @@ permissions:
   contents: write
 
 env:
-  APP_IMAGE: local/todo-app
-  ECR_REPO: gitops/todo-app
   AWS_ACCESS_KEY_ID: test
   AWS_SECRET_ACCESS_KEY: test
   AWS_REGION: us-east-1
   AWS_ENDPOINT_URL: http://localhost:4566
+  FLOCI: "true"
+  FLOCI_ENDPOINT: http://localhost:4566
+  TF_VAR_db_master_password: todolocalpw1
 
 jobs:
-  promote:
+  terraform:
+    # Provision the PROD floci cloud via Terragrunt before deploying.
     runs-on: lab
+    concurrency:
+      group: tf-prod
+      cancel-in-progress: false
+    env:
+      STATE_DIR: infra/terraform/.floci-state/prod
+      STATE_BUCKET: todo-app-tfstate-prod
+      STATE_KEY: prod/terraform.tfstate
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.gitea/actions/setup-lab
+
+      - name: Restore Terragrunt state from floci S3
+        run: |
+          set -euo pipefail
+          EP="--endpoint-url $FLOCI_ENDPOINT"
+          aws $EP s3 mb "s3://$STATE_BUCKET" >/dev/null 2>&1 || true
+          mkdir -p "$STATE_DIR"
+          if aws $EP s3 cp "s3://$STATE_BUCKET/$STATE_KEY" "$STATE_DIR/terraform.tfstate" >/dev/null 2>&1; then
+            echo "restored prior state"
+          else
+            echo "no prior state (first run)"
+          fi
+
+      - name: Terragrunt apply (ENV=prod, floci)
+        run: task terraform:apply ENV=prod AUTO_APPROVE=true
+
+      - name: Save Terragrunt state to floci S3
+        if: always()
+        run: |
+          set -euo pipefail
+          EP="--endpoint-url $FLOCI_ENDPOINT"
+          if [ -f "$STATE_DIR/terraform.tfstate" ]; then
+            aws $EP s3 cp "$STATE_DIR/terraform.tfstate" "s3://$STATE_BUCKET/$STATE_KEY" >/dev/null 2>&1 \
+              && echo "state saved" || echo "could not save state (floci S3 unavailable?)"
+          else
+            echo "no state file to save"
+          fi
+
+  cd:
+    # Promote the dev-proven image onto the floci-EKS prod cluster.
+    needs: terraform
+    runs-on: lab
+    env:
+      APP_IMAGE: local/todo-app
+      ECR_REPO: todo-app
+      LOCAL_GITOPS_DIR: /opt/local-gitops
     steps:
       - uses: actions/checkout@v4
 
@@ -68,10 +128,13 @@ jobs:
             docker tag "$REPO_URI:$tag" "$APP_IMAGE:$tag"
           fi
 
-      - name: Load image into the prod cluster
-        run: kind load docker-image "$APP_IMAGE:${{ steps.vars.outputs.tag }}" --name prod
+      - name: Import the image into the floci-EKS prod containerd
+        run: task eks:load-image ENV=prod IMAGE_TAG=${{ steps.vars.outputs.tag }}
 
-      - name: Bump values-prod.yaml and commit
+      - name: Bootstrap the floci-EKS prod cluster (MetalLB + ingress-nginx + Argo CD + Applications)
+        run: task eks:bootstrap ENV=prod
+
+      - name: Bump values-prod.yaml and commit (the in-EKS Argo syncs the new tag)
         run: |
           set -euo pipefail
           tag="${{ steps.vars.outputs.tag }}"

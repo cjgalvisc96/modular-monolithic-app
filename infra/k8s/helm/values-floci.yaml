@@ -1,0 +1,52 @@
+# floci-EKS override layer — applied AFTER values-<env>.yaml by the Argo
+# Application that targets the floci-provisioned EKS (k3s) workload cluster.
+#
+# It forces the toggles the floci EKS can't satisfy, leaving the per-env image
+# tag + config in values-<env>.yaml untouched:
+#   - no External Secrets Operator on the workload cluster -> a plain Secret is
+#     rendered from `secrets` (DB_USER/DB_PASSWORD/REDIS_PASSWORD)
+#   - ingress-nginx IS installed on the EKS cluster (eks:bootstrap-net) with a
+#     dedicated MetalLB IP (dev 172.18.255.230 / prod .240); the chart Ingress
+#     stays on, host comes from values-<env>.yaml (todo-app.<env>.local)
+#   - no IRSA on floci EKS (enable_irsa=false) -> drop the role-arn annotations
+#   - DEBUG=true -> StubLlmClient + dev-auth, so Cognito/Bedrock are not needed
+#   - Argo creates the namespace (CreateNamespace=true), so the chart must not
+# Datastores are the in-cluster Postgres/Redis (the dependencies-<env> App).
+namespaceConfig:
+  create: false
+
+externalSecrets:
+  enabled: false
+
+# Must match the in-cluster dependency manifests (dependencies/base/*.yaml):
+# postgres todo/todo, redis --requirepass redispass.
+secrets:
+  DB_USER: todo
+  DB_PASSWORD: todo
+  REDIS_PASSWORD: redispass
+
+# Served by the EKS cluster's own ingress-nginx (dedicated MetalLB IP). The
+# host stays as values-<env>.yaml sets it (todo-app.dev.local / .prod.local).
+ingress:
+  enabled: true
+  className: nginx
+
+# No IRSA on the floci EKS — leave the service-account role-arn annotations off.
+serviceAccounts:
+  api:
+    roleArn: ""
+  ai:
+    roleArn: ""
+  dbInit:
+    roleArn: ""
+
+# DEBUG dev-auth + StubLlmClient: no Cognito / Bedrock calls on the emulator.
+config:
+  DEBUG: "true"
+  LOG_LEVEL: DEBUG
+  AWS_ENDPOINT_URL: ""
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: todo
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"

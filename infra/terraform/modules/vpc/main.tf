@@ -1,5 +1,8 @@
 locals {
-  nat_gateway_count = var.single_nat_gateway ? 1 : length(var.azs)
+  # enable_nat=false (e.g. floci, which can't ReplaceRoute) → no NAT gateway,
+  # EIP, private route table or NAT route. Private subnets keep no egress route,
+  # which is fine for a local k3s cluster.
+  nat_gateway_count = var.enable_nat ? (var.single_nat_gateway ? 1 : length(var.azs)) : 0
 
   # Kubernetes/ELB subnet auto-discovery tags (only set when a cluster name is provided).
   cluster_tags = var.eks_cluster_name != "" ? {
@@ -116,7 +119,8 @@ resource "aws_route" "private_nat" {
 }
 
 resource "aws_route_table_association" "private" {
-  count = length(aws_subnet.private)
+  # No private route table exists when NAT is disabled (enable_nat=false).
+  count = local.nat_gateway_count > 0 ? length(aws_subnet.private) : 0
 
   subnet_id = aws_subnet.private[count.index].id
   # When using a single NAT gateway all private subnets share route table 0.

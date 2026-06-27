@@ -9,6 +9,6 @@ output "model_arns" {
 }
 
 output "resolved_model_arns" {
-  description = "Canonical model ARNs resolved from the Bedrock foundation-model data source."
-  value       = [for m in data.aws_bedrock_foundation_model.this : m.model_arn]
+  description = "Canonical model ARNs resolved from the Bedrock foundation-model data source (falls back to the computed ARNs when validation is disabled)."
+  value       = var.enable_model_validation ? [for m in data.aws_bedrock_foundation_model.this : m.model_arn] : local.model_arns
 }

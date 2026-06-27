@@ -30,6 +30,15 @@ locals {
     Project     = var.project
     ManagedBy   = "terraform"
   }
+
+  # floci fallbacks: aurora/redis/cognito are disabled on floci (LocalStack
+  # community can't apply them), so the app uses in-cluster Postgres/Redis and
+  # DEBUG dev-auth. one(module.x[*].out) is null when the module count is 0.
+  db_host                    = var.floci ? "postgres" : one(module.aurora[*].endpoint)
+  db_port                    = var.floci ? 5432 : one(module.aurora[*].port)
+  db_name                    = var.floci ? "todo" : one(module.aurora[*].database_name)
+  cognito_client_secret      = var.floci ? "floci-stub-cognito-secret" : one(module.cognito[*].app_client_secret)
+  aurora_cluster_resource_id = var.floci ? "*" : one(module.aurora[*].cluster_resource_id)
 }
 
 ############################################
@@ -44,6 +53,7 @@ module "vpc" {
   public_subnet_cidrs  = ["10.10.0.0/20", "10.10.16.0/20"]
   private_subnet_cidrs = ["10.10.128.0/20", "10.10.144.0/20"]
   single_nat_gateway   = true # dev: one NAT to save cost
+  enable_nat           = !var.floci # floci can't ReplaceRoute; k3s needs no NAT
   eks_cluster_name     = local.name
   tags                 = local.tags
 }
@@ -56,6 +66,7 @@ module "eks" {
 
   cluster_name       = local.name
   kubernetes_version = "1.30"
+  enable_irsa        = !var.floci
   vpc_id             = module.vpc.vpc_id
   private_subnet_ids = module.vpc.private_subnet_ids
   public_subnet_ids  = module.vpc.public_subnet_ids
@@ -83,6 +94,7 @@ module "ecr" {
 ############################################
 module "aurora" {
   source = "../../modules/aurora"
+  count  = var.floci ? 0 : 1
 
   name                       = local.name
   vpc_id                     = module.vpc.vpc_id
@@ -100,6 +112,7 @@ module "aurora" {
 
 module "redis" {
   source = "../../modules/redis"
+  count  = var.floci ? 0 : 1
 
   name                       = local.name
   vpc_id                     = module.vpc.vpc_id
@@ -118,6 +131,7 @@ module "redis" {
 ############################################
 module "cognito" {
   source = "../../modules/cognito"
+  count  = var.floci ? 0 : 1
 
   name           = local.name
   user_pool_name = "${local.name}-users"
@@ -138,11 +152,11 @@ module "secrets" {
   db_credentials = {
     username = "todo_admin"
     password = var.db_master_password
-    host     = module.aurora.endpoint
-    port     = module.aurora.port
-    dbname   = module.aurora.database_name
+    host     = local.db_host
+    port     = local.db_port
+    dbname   = local.db_name
   }
-  cognito_client_secret = module.cognito.app_client_secret
+  cognito_client_secret = local.cognito_client_secret
   tags                  = local.tags
 }
 
@@ -171,8 +185,9 @@ module "sqs_sns" {
 module "bedrock" {
   source = "../../modules/bedrock"
 
-  model_ids = var.bedrock_model_ids
-  tags      = local.tags
+  model_ids               = var.bedrock_model_ids
+  enable_model_validation = var.bedrock_validate_models
+  tags                    = local.tags
 }
 
 ############################################
@@ -188,6 +203,7 @@ module "s3_assets" {
 
 module "cdn" {
   source = "../../modules/cdn"
+  count  = var.floci ? 0 : 1
 
   name                           = local.name
   s3_bucket_id                   = module.s3_assets.bucket_id
@@ -201,6 +217,7 @@ module "cdn" {
 ############################################
 module "route53" {
   source = "../../modules/route53"
+  count  = var.floci ? 0 : 1
 
   domain_name = var.domain_name
   create_zone = true
@@ -209,8 +226,8 @@ module "route53" {
       name = var.domain_name
       type = "A"
       alias = {
-        name                   = module.cdn.domain_name
-        zone_id                = module.cdn.hosted_zone_id
+        name                   = one(module.cdn[*].domain_name)
+        zone_id                = one(module.cdn[*].hosted_zone_id)
         evaluate_target_health = false
       }
     },
@@ -223,13 +240,14 @@ module "route53" {
 ############################################
 module "iam" {
   source = "../../modules/iam"
+  count  = var.floci ? 0 : 1
 
   name              = local.name
   oidc_provider_arn = module.eks.oidc_provider_arn
   oidc_provider_url = module.eks.oidc_provider_url
   namespace         = local.k8s_namespace
 
-  aurora_cluster_resource_id = module.aurora.cluster_resource_id
+  aurora_cluster_resource_id = local.aurora_cluster_resource_id
   aws_region                 = var.aws_region
   aws_account_id             = data.aws_caller_identity.current.account_id
 

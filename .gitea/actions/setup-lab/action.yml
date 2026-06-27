@@ -1,7 +1,8 @@
 name: Setup lab tools
 description: >-
-  Install the pinned CLIs the lab CD/promote jobs need (aws, kind, yq). docker
-  and git already ship in the job image. Versions track the local-gitops lab.
+  Install the pinned CLIs the lab CD/promote jobs need (aws, kind, yq, kubectl,
+  helm, terraform, terragrunt, task). docker and git already ship in the job
+  image. Versions track the local-gitops lab.
 
 runs:
   using: composite
@@ -27,4 +28,37 @@ runs:
           unzip -q "$tmp/aws.zip" -d "$tmp"
           "$tmp/aws/install" --update
           rm -rf "$tmp"
+        fi
+
+    - name: Install kubectl, helm, terraform, terragrunt, task
+      shell: bash
+      run: |
+        set -euo pipefail
+        KUBECTL_VERSION=v1.30.4
+        HELM_VERSION=v3.15.4
+        TERRAFORM_VERSION=1.9.8
+        TERRAGRUNT_VERSION=v0.67.4
+        TASK_VERSION=v3.40.1
+        if ! command -v kubectl >/dev/null 2>&1; then
+          curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x /usr/local/bin/kubectl
+        fi
+        if ! command -v helm >/dev/null 2>&1; then
+          tmp=$(mktemp -d)
+          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar -xz -C "$tmp"
+          install -m 0755 "$tmp/linux-amd64/helm" /usr/local/bin/helm
+          rm -rf "$tmp"
+        fi
+        if ! command -v terraform >/dev/null 2>&1; then
+          tmp=$(mktemp -d)
+          curl -fsSLo "$tmp/tf.zip" "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          unzip -q -o "$tmp/tf.zip" -d /usr/local/bin
+          rm -rf "$tmp"
+        fi
+        if ! command -v terragrunt >/dev/null 2>&1; then
+          curl -fsSLo /usr/local/bin/terragrunt "https://github.com/gruntwork-io/terragrunt/releases/download/${TERRAGRUNT_VERSION}/terragrunt_linux_amd64"
+          chmod +x /usr/local/bin/terragrunt
+        fi
+        if ! command -v task >/dev/null 2>&1; then
+          sh -c "$(curl -fsSL https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin "$TASK_VERSION"
         fi

@@ -34,6 +34,12 @@ variable "single_nat_gateway" {
   default     = true
 }
 
+variable "enable_nat" {
+  description = "Provision NAT gateway(s) + private egress routes. Set false on floci, which can't ReplaceRoute (a local k3s cluster needs no NAT)."
+  type        = bool
+  default     = true
+}
+
 variable "eks_cluster_name" {
   description = "EKS cluster name, used to tag subnets for ELB/Kubernetes auto-discovery."
   type        = string

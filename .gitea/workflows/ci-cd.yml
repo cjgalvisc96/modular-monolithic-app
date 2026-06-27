@@ -1,26 +1,34 @@
 name: CI/CD
 
-# One pipeline, ordered by job dependencies: ci -> seed-floci -> cd. Deploys are
-# gated on green checks (cd needs ci, transitively) AND on floci being seeded
-# (cd needs seed-floci) — so the build/push/deploy never runs unless lint, types,
-# architecture and coverage pass first, and the ECR repo + SSM params the app
-# needs already exist. (Gitea 1.22 has no cross-workflow `workflow_run`, so the
-# ci/seed/cd ordering must be job dependencies in a single workflow.)
+# DEV (AUTO) pipeline, ordered by job dependencies: ci -> terraform -> cd.
 #
-# CI runs on every push (and PR) to main. CD runs only on pushes to main, after
-# CI. There is deliberately NO `paths:` filter on the push trigger: in the lab,
-# `task gitea:ship` force-pushes whatever HEAD is, and every ship must deploy —
-# a `paths:` filter would silently skip the pipeline when the last commit only
-# touched docs/Taskfile (which is exactly what happens during onboarding). Loop
-# prevention is the [skip ci] in the CD bump commit (honoured by Gitea), not paths.
+#   ci         lint / types / dead-code / architecture / tests+coverage (>=97%)
+#   terraform  provision the DEV cloud on floci via Terragrunt (the full
+#              infra/terragrunt/dev stack: VPC, EKS, ECR, Secrets, SQS/SNS,
+#              EventBridge, S3, KMS, Bedrock scoping). FLOCI=true disables the
+#              modules LocalStack-community can't apply (Aurora/ElastiCache/
+#              Cognito/CloudFront/Route53) — the app uses in-cluster Postgres/
+#              Redis + DEBUG dev-auth instead. State lives in floci S3 between
+#              runs (a fresh checkout has no local state).
+#   cd         build the image, import it into the floci-EKS cluster containerd,
+#              bootstrap the cluster's OWN GitOps stack (MetalLB + ingress-nginx
+#              + Argo CD + the repo & Applications), then bump values-dev.yaml.
+#              The Argo CD running INSIDE the floci-EKS cluster syncs the chart
+#              in-cluster — exactly like the kind dev/prod clusters do.
 #
-# No PostgreSQL/Docker is needed for the tests: the suite is unit + integration
-# (integration on SQLite; the RLS isolation test self-skips without
-# TEST_DATABASE_URL).
+# Topology: each floci-provisioned EKS (k3s) cluster is self-contained — its own
+# Argo CD + ingress (dev LB IP 172.18.255.230). Gitea + Grafana stay on the kind
+# management/observability plane.
 #
-# Both jobs run on the host act_runner (runs-on: lab): host networking + the
-# host docker daemon, so floci is at localhost:4566 and `kind load` reaches the
-# kind node containers directly. PROD is never touched here — see promote.yml.
+# PROD is never touched here — promote.yml (manual) does prod, after dev is green.
+#
+# Gitea 1.22 has no cross-workflow `workflow_run`, so ci/terraform/cd must be
+# job dependencies in one workflow. No `paths:` filter: `task gitea:ship`
+# force-pushes whatever HEAD is and every ship must deploy; loop prevention is
+# the [skip ci] in the CD bump commit. The whole pipeline runs on the host
+# act_runner (runs-on: lab): host networking + host docker, so floci is at
+# localhost:4566, the kind clusters are reachable, and `docker exec` reaches the
+# floci-EKS k3s container.
 
 on:
   push:
@@ -34,6 +42,16 @@ permissions:
 env:
   UV_VERSION: "0.11.19"
   TASK_VERSION: "v3.40.1"
+  # floci (local AWS) — credentials are the LocalStack defaults.
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://localhost:4566
+  FLOCI: "true"
+  FLOCI_ENDPOINT: http://localhost:4566
+  # Lab-only Aurora master password (floci doesn't run Aurora; it just feeds the
+  # Secrets Manager entry). Safe to inline for a throwaway local emulator.
+  TF_VAR_db_master_password: todolocalpw1
 
 jobs:
   ci:
@@ -67,38 +85,57 @@ jobs:
         run: task check:architecture
 
       - name: Tests + coverage (>=97%)
-        # unit + integration only; integration runs on SQLite and the RLS test
-        # self-skips without TEST_DATABASE_URL, so no PostgreSQL is required.
         run: task test:coverage
 
-  seed-floci:
-    # Provision the floci infra the deploy depends on, BEFORE building: the ECR
-    # repo the image is pushed to, and the SSM params (/gitops/<env>/todo-app/*)
-    # the app's ExternalSecret reads for DB/Redis creds. Idempotent — same values
-    # every run, for dev AND prod. Push-only (PRs stop at ci).
+  terraform:
+    # Provision the DEV floci cloud via Terragrunt BEFORE deploying. State is
+    # kept in floci S3 between runs (the Terragrunt floci backend is local, so a
+    # fresh checkout would otherwise re-create everything and fail on "exists").
     needs: ci
     if: ${{ github.event_name == 'push' }}
     runs-on: lab
+    concurrency:
+      group: tf-dev
+      cancel-in-progress: false
     env:
-      AWS_ENDPOINT_URL: http://localhost:4566
-      AWS_REGION: us-east-1
+      STATE_DIR: infra/terraform/.floci-state/dev
+      STATE_BUCKET: todo-app-tfstate-dev
+      STATE_KEY: dev/terraform.tfstate
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.gitea/actions/setup-lab     # installs the aws CLI
+      - uses: ./.gitea/actions/setup-lab
 
-      - name: Seed floci (ECR repo + SSM params for dev/prod)
+      - name: Restore Terragrunt state from floci S3
         run: |
           set -euo pipefail
-          # floci-seed.sh expects an AWS profile named 'floci' (floci creds = test/test).
-          aws configure set aws_access_key_id     test       --profile floci
-          aws configure set aws_secret_access_key test       --profile floci
-          aws configure set region                us-east-1  --profile floci
-          AWS_PROFILE=floci ./infra/k8s/gitops/floci-seed.sh
+          EP="--endpoint-url $FLOCI_ENDPOINT"
+          aws $EP s3 mb "s3://$STATE_BUCKET" >/dev/null 2>&1 || true
+          mkdir -p "$STATE_DIR"
+          if aws $EP s3 cp "s3://$STATE_BUCKET/$STATE_KEY" "$STATE_DIR/terraform.tfstate" >/dev/null 2>&1; then
+            echo "restored prior state"
+          else
+            echo "no prior state (first run)"
+          fi
+
+      - name: Terragrunt apply (ENV=dev, floci)
+        run: task terraform:apply ENV=dev AUTO_APPROVE=true
+
+      - name: Save Terragrunt state to floci S3
+        if: always()
+        run: |
+          set -euo pipefail
+          EP="--endpoint-url $FLOCI_ENDPOINT"
+          if [ -f "$STATE_DIR/terraform.tfstate" ]; then
+            aws $EP s3 cp "$STATE_DIR/terraform.tfstate" "s3://$STATE_BUCKET/$STATE_KEY" >/dev/null 2>&1 \
+              && echo "state saved" || echo "could not save state (floci S3 unavailable?)"
+          else
+            echo "no state file to save"
+          fi
 
   cd:
-    # Deploy to DEV only after CI passes AND floci is seeded, on pushes to main.
-    needs: seed-floci
+    # Build + deploy onto the floci-EKS workload cluster, after the infra exists.
+    needs: terraform
     if: ${{ github.event_name == 'push' }}
     runs-on: lab
     concurrency:
@@ -106,11 +143,10 @@ jobs:
       cancel-in-progress: false
     env:
       APP_IMAGE: local/todo-app
-      ECR_REPO: gitops/todo-app
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      AWS_REGION: us-east-1
-      AWS_ENDPOINT_URL: http://localhost:4566
+      ECR_REPO: todo-app
+      # The platform (local-gitops) is bind-mounted here by its runner config;
+      # eks:bootstrap calls its eks:install-argo to install Argo CD into EKS.
+      LOCAL_GITOPS_DIR: /opt/local-gitops
     steps:
       - uses: actions/checkout@v4
 
@@ -123,7 +159,7 @@ jobs:
       - name: Build prod image
         run: docker build --target prod -t "$APP_IMAGE:${{ steps.vars.outputs.tag }}" .
 
-      - name: Push to floci ECR
+      - name: Push to floci ECR (artifact store for promote)
         run: |
           set -euo pipefail
           tag="${{ steps.vars.outputs.tag }}"
@@ -136,10 +172,15 @@ jobs:
           docker tag "$APP_IMAGE:$tag" "$REPO_URI:$tag"
           docker push "$REPO_URI:$tag"
 
-      - name: Load image into the dev cluster
-        run: kind load docker-image "$APP_IMAGE:${{ steps.vars.outputs.tag }}" --name dev
+      - name: Import the image into the floci-EKS containerd
+        run: task eks:load-image ENV=dev IMAGE_TAG=${{ steps.vars.outputs.tag }}
 
-      - name: Bump values-dev.yaml and commit
+      - name: Bootstrap the floci-EKS cluster (MetalLB + ingress-nginx + Argo CD + Applications)
+        # Installs the self-contained GitOps stack INTO the floci-EKS cluster and
+        # registers the repo + Applications. Idempotent: a no-op once present.
+        run: task eks:bootstrap ENV=dev
+
+      - name: Bump values-dev.yaml and commit (the in-EKS Argo syncs the new tag)
         run: |
           set -euo pipefail
           tag="${{ steps.vars.outputs.tag }}"

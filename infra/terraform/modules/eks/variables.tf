@@ -89,3 +89,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_irsa" {
+  description = "Provision the OIDC provider + aws-auth ConfigMap for IRSA. Set false on floci (its EKS has no OIDC issuer and k3s ignores aws-auth)."
+  type        = bool
+  default     = true
+}

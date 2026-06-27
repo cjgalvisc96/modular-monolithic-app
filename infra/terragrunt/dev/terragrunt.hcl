@@ -9,15 +9,6 @@ terraform {
   source = "${get_repo_root()}/infra/terraform//environments/dev"
 }
 
-# The environments already declare their own AWS provider blocks (so they remain
-# usable with plain `terraform` too). Skip the root-generated provider here to
-# avoid a duplicate-provider definition.
-generate "provider" {
-  path      = "provider_generated.tf"
-  if_exists = "skip"
-  contents  = "# provider defined in environments/dev/main.tf"
-}
-
 inputs = {
   environment           = "dev"
   domain_name           = "dev.todo-app.example.com"

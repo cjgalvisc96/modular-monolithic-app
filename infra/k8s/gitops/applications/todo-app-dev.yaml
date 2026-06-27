@@ -1,4 +1,9 @@
-# Argo CD Application — todo-app on the dev cluster.
+# Argo CD Application — todo-app on the dev floci-EKS (k3s) cluster.
+#
+# The floci-provisioned EKS cluster is self-contained: it runs its OWN Argo CD
+# (installed by `task eks:bootstrap-argo ENV=dev` in the pipeline, after the
+# Terragrunt apply), which syncs this Application IN-CLUSTER — exactly like the
+# kind dev/prod clusters do. destination is therefore the in-cluster API.
 #
 # This is the app's registration artifact for the local-gitops platform. Drop a
 # copy into platform-config/envs/dev/ (the root app-of-apps recurses that dir),
@@ -25,6 +30,7 @@ spec:
       valueFiles:
         - values.yaml
         - values-dev.yaml
+        - values-floci.yaml
       parameters:
         - name: namespaceConfig.create
           value: "false"

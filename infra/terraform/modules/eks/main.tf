@@ -1,7 +1,8 @@
 data "aws_partition" "current" {}
 
 data "tls_certificate" "oidc" {
-  url = aws_eks_cluster.this.identity[0].oidc[0].issuer
+  count = var.enable_irsa ? 1 : 0
+  url   = aws_eks_cluster.this.identity[0].oidc[0].issuer
 }
 
 ############################################
@@ -55,11 +56,15 @@ resource "aws_eks_cluster" "this" {
     public_access_cidrs = var.endpoint_public_access ? var.public_access_cidrs : null
   }
 
-  # Envelope-encrypt Kubernetes secrets with the CMK above.
-  encryption_config {
-    resources = ["secrets"]
-    provider {
-      key_arn = aws_kms_key.secrets.arn
+  # Envelope-encrypt Kubernetes secrets with the CMK above. floci can't
+  # AssociateEncryptionConfig, so skip it there (gated by enable_irsa).
+  dynamic "encryption_config" {
+    for_each = var.enable_irsa ? [1] : []
+    content {
+      resources = ["secrets"]
+      provider {
+        key_arn = aws_kms_key.secrets.arn
+      }
     }
   }
 
@@ -72,9 +77,10 @@ resource "aws_eks_cluster" "this" {
 # OIDC provider — REQUIRED for IRSA
 ############################################
 resource "aws_iam_openid_connect_provider" "oidc" {
+  count           = var.enable_irsa ? 1 : 0
   url             = aws_eks_cluster.this.identity[0].oidc[0].issuer
   client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.oidc.certificates[0].sha1_fingerprint]
+  thumbprint_list = [data.tls_certificate.oidc[0].certificates[0].sha1_fingerprint]
 
   tags = merge(var.tags, { Name = "${var.cluster_name}-oidc" })
 }
@@ -150,6 +156,7 @@ resource "aws_eks_node_group" "this" {
 # aws-auth ConfigMap — maps node role + extra roles into the cluster
 ############################################
 resource "kubernetes_config_map_v1_data" "aws_auth" {
+  count = var.enable_irsa ? 1 : 0
   metadata {
     name      = "aws-auth"
     namespace = "kube-system"

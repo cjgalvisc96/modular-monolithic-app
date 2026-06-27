@@ -176,82 +176,53 @@ tasks:
       - terragrunt hcl format --check --working-dir {{.TG_DIR}}
 
   terraform:validate:
-    desc: Validate every Terraform module + the local floci stack (offline, no backend)
+    desc: Validate every Terraform module (offline, no backend)
     preconditions:
       - sh: command -v terraform
         msg: "Terraform not found. Install: https://developer.hashicorp.com/terraform/install"
     cmds:
       - |
         set -e
-        for d in {{.TF_DIR}}/modules/*/ {{.TF_DIR}}/local/; do
+        for d in {{.TF_DIR}}/modules/*/; do
           [ -f "$d/main.tf" ] || continue
           echo "==> validate $d"
           terraform -chdir="$d" init -backend=false -input=false -no-color >/dev/null
           terraform -chdir="$d" validate -no-color
         done
 
-  # ENV=dev|prod drive the cloud stacks via Terragrunt (S3 backend, full AWS).
-  # ENV=local drives the floci stack (infra/terraform/local) via plain Terraform
-  # with a local backend — the AWS resources floci can emulate (ECR + SSM).
+  # ENV=dev|prod drive the floci/cloud stacks via Terragrunt. FLOCI=true targets
+  # the local floci emulator (the pipeline sets it); unset = real AWS.
   terraform:init:
-    desc: 'Init an environment (ENV=dev|prod via Terragrunt; ENV=local = floci stack)'
+    desc: 'Init an environment (ENV=dev|prod) via Terragrunt'
     preconditions:
-      - sh: command -v terraform
-        msg: "Terraform not found. Install: https://developer.hashicorp.com/terraform/install"
+      - sh: command -v terragrunt
+        msg: "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/"
     cmds:
-      - |
-        set -e
-        if [ "{{.ENV}}" = "local" ]; then
-          terraform -chdir={{.TF_DIR}}/local init -input=false
-        else
-          command -v terragrunt >/dev/null 2>&1 || { echo "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/" >&2; exit 1; }
-          ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt init -input=false )
-        fi
+      - ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt init -input=false )
 
   terraform:plan:
-    desc: 'Plan an environment (ENV=dev|prod via Terragrunt; ENV=local = floci stack)'
+    desc: 'Plan an environment (ENV=dev|prod) via Terragrunt'
     preconditions:
-      - sh: command -v terraform
-        msg: "Terraform not found. Install: https://developer.hashicorp.com/terraform/install"
+      - sh: command -v terragrunt
+        msg: "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/"
     cmds:
-      - |
-        set -e
-        if [ "{{.ENV}}" = "local" ]; then
-          terraform -chdir={{.TF_DIR}}/local plan -input=false -out=tfplan
-        else
-          command -v terragrunt >/dev/null 2>&1 || { echo "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/" >&2; exit 1; }
-          ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt plan -input=false -out=tfplan )
-        fi
+      - ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt plan -input=false -out=tfplan )
 
   terraform:apply:
-    desc: 'Apply an environment (ENV=dev|prod via Terragrunt; ENV=local = floci stack). AUTO_APPROVE=true for CI.'
+    desc: 'Apply an environment (ENV=dev|prod) via Terragrunt. AUTO_APPROVE=true for CI.'
     preconditions:
-      - sh: command -v terraform
-        msg: "Terraform not found. Install: https://developer.hashicorp.com/terraform/install"
+      - sh: command -v terragrunt
+        msg: "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/"
     cmds:
-      - |
-        set -e
-        if [ "{{.ENV}}" = "local" ]; then
-          terraform -chdir={{.TF_DIR}}/local apply -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}}
-        else
-          command -v terragrunt >/dev/null 2>&1 || { echo "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/" >&2; exit 1; }
-          ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt apply -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}} )
-        fi
+      - ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt apply -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}} )
 
   terraform:destroy:
-    desc: 'Destroy an environment (ENV=dev|prod via Terragrunt; ENV=local = floci stack). AUTO_APPROVE=true for CI.'
+    desc: 'Destroy an environment (ENV=dev|prod) via Terragrunt. AUTO_APPROVE=true for CI.'
     preconditions:
-      - sh: command -v terraform
-        msg: "Terraform not found. Install: https://developer.hashicorp.com/terraform/install"
+      - sh: command -v terragrunt
+        msg: "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/"
     cmds:
-      - |
-        set -e
-        if [ "{{.ENV}}" = "local" ]; then
-          terraform -chdir={{.TF_DIR}}/local destroy -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}}
-        else
-          command -v terragrunt >/dev/null 2>&1 || { echo "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/" >&2; exit 1; }
-          ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt destroy -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}} )
-        fi
+      - ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt destroy -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}} )
 
   terraform:test:
     desc: Run Terratest infra tests (Go) for the Helm/Terraform layer
@@ -355,6 +326,185 @@ tasks:
     cmds:
       - kubectl --context kind-dev -n todo-app port-forward svc/postgres 15432:5432
 
+  # --- floci-EKS cluster (the k3s container Terraform/Terragrunt spins up).
+  # Ownership split: THIS repo owns the cluster's network (MetalLB/ingress) and
+  # the todo-app deployment (repo + Applications); the PLATFORM (local-gitops)
+  # owns the GitOps control plane — Argo CD is installed via its
+  # `eks:install-argo` task. eks:bootstrap orchestrates all three after
+  # `terragrunt apply`. These run on the pipeline (and locally).
+  #
+  # LB IPs are OUTSIDE the kind MetalLB pools (mgmt .200-.209, dev .210-.219,
+  # prod .220-.229) to avoid L2 collisions: dev EKS = .230, prod EKS = .240.
+  eks:bootstrap:
+    desc: 'Full floci-EKS bootstrap (ENV=dev|prod): network (app) + Argo CD (platform) + todo-app (app)'
+    vars:
+      LOCAL_GITOPS_DIR: '{{.LOCAL_GITOPS_DIR | default "/opt/local-gitops"}}'
+    cmds:
+      # 1) App-owned cluster network: MetalLB + ingress-nginx + kind-net.
+      - task: eks:bootstrap-net
+        vars: { ENV: "{{.ENV}}" }
+      - task: eks:kubeconfig
+        vars: { ENV: "{{.ENV}}" }
+      # 2) Platform-owned GitOps control plane: install Argo CD via local-gitops.
+      #    Mounted at /opt/local-gitops in CI; falls back to the home checkout.
+      - |
+        set -euo pipefail
+        DIR="{{.LOCAL_GITOPS_DIR}}"
+        [ -f "$DIR/Taskfile.yml" ] || DIR="$HOME/Documents/Personal/local-gitops"
+        [ -f "$DIR/Taskfile.yml" ] || { echo "local-gitops not found — set LOCAL_GITOPS_DIR to its checkout" >&2; exit 1; }
+        ( cd "$DIR" && task eks:install-argo ENV="{{.ENV}}" KUBECONFIG="/tmp/floci-eks-{{.ENV}}.kubeconfig" )
+      # 3) App-owned deployment: repo credential + todo-app Applications.
+      - task: eks:register-app
+        vars: { ENV: "{{.ENV}}" }
+
+  eks:bootstrap-net:
+    desc: 'Install MetalLB (dedicated single-IP pool) + ingress-nginx into the floci-EKS cluster (ENV=dev|prod)'
+    vars:
+      K3S: "floci-eks-{{.PROJECT}}-{{.ENV}}"
+      EKS_LB_IP: '{{if eq .ENV "prod"}}172.18.255.240{{else}}172.18.255.230{{end}}'
+      METALLB_VERSION: '{{.METALLB_VERSION | default "v0.14.8"}}'
+      INGRESS_NGINX_REF: '{{.INGRESS_NGINX_REF | default "controller-v1.11.3"}}'
+    preconditions:
+      - sh: docker inspect {{.K3S}} >/dev/null 2>&1
+        msg: "k3s container {{.K3S}} not found — run `task terraform:apply ENV={{.ENV}}` (FLOCI=true) first."
+    cmds:
+      - task: eks:kubeconfig
+        vars: { ENV: "{{.ENV}}" }
+      - |
+        set -euo pipefail
+        export KUBECONFIG="/tmp/floci-eks-{{.ENV}}.kubeconfig"
+        # The k3s container must sit on the shared `kind` network so MetalLB can
+        # L2-advertise {{.EKS_LB_IP}} where the host (and kind) can reach it.
+        docker network connect kind "{{.K3S}}" 2>/dev/null || true
+        # 1) MetalLB (floci k3s ships no servicelb, so no klipper conflict).
+        kubectl apply -f "https://raw.githubusercontent.com/metallb/metallb/{{.METALLB_VERSION}}/config/manifests/metallb-native.yaml" >/dev/null
+        kubectl -n metallb-system rollout status deploy/controller --timeout=180s
+        kubectl -n metallb-system rollout status daemonset/speaker --timeout=180s
+        # 2) Single-IP pool + L2 advertisement (retry: the validating webhook may
+        #    take a moment to accept connections after the controller is Ready).
+        for i in $(seq 1 10); do
+          kubectl apply -f - >/dev/null 2>&1 <<EOF && break || sleep 6
+        apiVersion: metallb.io/v1beta1
+        kind: IPAddressPool
+        metadata: { name: floci-eks, namespace: metallb-system }
+        spec:
+          addresses: ["{{.EKS_LB_IP}}/32"]
+        ---
+        apiVersion: metallb.io/v1beta1
+        kind: L2Advertisement
+        metadata: { name: floci-eks, namespace: metallb-system }
+        spec:
+          ipAddressPools: [floci-eks]
+        EOF
+        done
+        # 3) ingress-nginx (cloud manifest -> a LoadBalancer svc MetalLB fills).
+        kubectl apply -f "https://raw.githubusercontent.com/kubernetes/ingress-nginx/{{.INGRESS_NGINX_REF}}/deploy/static/provider/cloud/deploy.yaml" >/dev/null
+        kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=240s
+        kubectl -n ingress-nginx patch svc ingress-nginx-controller \
+          -p '{"spec":{"loadBalancerIP":"{{.EKS_LB_IP}}"}}' >/dev/null 2>&1 || true
+        echo "floci-eks-{{.ENV}} network ready — ingress LB IP {{.EKS_LB_IP}}"
+
+  eks:register-app:
+    desc: 'Register todo-app with the in-EKS Argo CD (ENV=dev|prod): Gitea repo credential + Applications (deps + app). Argo must already be installed (platform: eks:install-argo).'
+    vars:
+      K3S: "floci-eks-{{.PROJECT}}-{{.ENV}}"
+    preconditions:
+      - sh: docker inspect {{.K3S}} >/dev/null 2>&1
+        msg: "k3s container {{.K3S}} not found — run `task terraform:apply ENV={{.ENV}}` (FLOCI=true) first."
+    cmds:
+      - task: eks:kubeconfig
+        vars: { ENV: "{{.ENV}}" }
+      - |
+        set -euo pipefail
+        export KUBECONFIG="/tmp/floci-eks-{{.ENV}}.kubeconfig"
+        kubectl -n argocd get deploy argocd-server >/dev/null 2>&1 \
+          || { echo "Argo CD not installed — run the platform task first (eks:install-argo)" >&2; exit 1; }
+        # Gitea repo credential so the in-EKS Argo can read the app repo.
+        kubectl apply -f - <<EOF >/dev/null
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: repo-{{.GITEA_REPO_NAME}}
+          namespace: argocd
+          labels:
+            argocd.argoproj.io/secret-type: repository
+        stringData:
+          type: git
+          name: {{.GITEA_REPO_NAME}}
+          url: {{.GITEA_INCLUSTER_URL}}/{{.GITEA_NS}}/{{.GITEA_REPO_NAME}}.git
+          username: {{.GITEA_USER}}
+          password: {{.GITEA_PASSWORD}}
+        EOF
+        # The app's Applications (deps wave 1, app wave 2) — in-cluster dest.
+        kubectl apply \
+          -f infra/k8s/gitops/applications/dependencies-{{.ENV}}.yaml \
+          -f infra/k8s/gitops/applications/todo-app-{{.ENV}}.yaml >/dev/null
+        echo "registered todo-app with the in-EKS Argo (ENV={{.ENV}})"
+
+  eks:load-image:
+    desc: 'Import an app image (IMAGE_TAG) into the floci-EKS workload cluster containerd (ENV=dev|prod). k3s equivalent of `kind load`.'
+    vars:
+      K3S: "floci-eks-{{.PROJECT}}-{{.ENV}}"
+      APP_IMAGE: '{{.APP_IMAGE | default "local/todo-app"}}'
+    preconditions:
+      - sh: docker inspect {{.K3S}} >/dev/null 2>&1
+        msg: "k3s container {{.K3S}} not found — run `task terraform:apply ENV={{.ENV}}` (FLOCI=true) first."
+      - sh: docker image inspect {{.APP_IMAGE}}:{{.IMAGE_TAG}} >/dev/null 2>&1
+        msg: "image {{.APP_IMAGE}}:{{.IMAGE_TAG}} not found locally — build it first."
+    cmds:
+      - |
+        set -euo pipefail
+        # Stream the image straight into k3s's containerd (namespace k8s.io), so
+        # pods with imagePullPolicy: IfNotPresent run it without a registry pull.
+        docker save "{{.APP_IMAGE}}:{{.IMAGE_TAG}}" \
+          | docker exec -i "{{.K3S}}" ctr -n k8s.io images import -
+        echo "loaded {{.APP_IMAGE}}:{{.IMAGE_TAG}} into {{.K3S}}"
+
+  eks:kubeconfig:
+    desc: 'Write a kubeconfig for the floci-EKS workload cluster (ENV=dev|prod) to KUBECONFIG_OUT (default /tmp/floci-eks-<env>.kubeconfig)'
+    vars:
+      K3S: "floci-eks-{{.PROJECT}}-{{.ENV}}"
+    cmds:
+      - |
+        set -euo pipefail
+        OUT="{{.KUBECONFIG_OUT}}"; [ -n "$OUT" ] || OUT="/tmp/floci-eks-{{.ENV}}.kubeconfig"
+        PORT=$(docker inspect -f '{{`{{(index (index .NetworkSettings.Ports "6443/tcp") 0).HostPort}}`}}' "{{.K3S}}")
+        docker exec "{{.K3S}}" cat /etc/rancher/k3s/k3s.yaml \
+          | sed "s#https://127.0.0.1:6443#https://localhost:${PORT}#" > "$OUT"
+        echo "wrote $OUT (server localhost:${PORT})"
+        KUBECONFIG="$OUT" kubectl get nodes
+
+  eks:argo-password:
+    desc: 'Print the in-EKS Argo CD admin password (ENV=dev|prod). User: admin. UI: http://argo.<env>.local'
+    cmds:
+      - task: eks:kubeconfig
+        vars: { ENV: "{{.ENV}}" }
+      - |
+        set -euo pipefail
+        pw=$(KUBECONFIG="/tmp/floci-eks-{{.ENV}}.kubeconfig" kubectl -n argocd get secret argocd-initial-admin-secret \
+          -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || true)
+        [ -n "$pw" ] || { echo "no argocd-initial-admin-secret (Argo not bootstrapped, or password already rotated)" >&2; exit 1; }
+        echo "Argo CD (floci-eks-{{.ENV}})  http://argo.{{.ENV}}.local   user: admin   password: $pw"
+
+  eks:hosts:
+    desc: 'Add/refresh /etc/hosts entries for the floci-EKS app (run with sudo): todo-app.dev.local -> .230, todo-app.prod.local -> .240'
+    cmds:
+      - |
+        set -e
+        # This repo owns ONLY its app hostname. The platform (local-gitops) owns
+        # the ops-surface DNS (gitea/grafana/argo). Distinct marker so the two
+        # writers never clobber each other's lines.
+        [ -w /etc/hosts ] || { echo "need write access to /etc/hosts — run: sudo task eks:hosts" >&2; exit 1; }
+        marker="# floci-eks-app"
+        tmp=$(mktemp)
+        grep -v "$marker" /etc/hosts > "$tmp" || true
+        cat >> "$tmp" <<EOF
+        172.18.255.230  todo-app.dev.local $marker
+        172.18.255.240  todo-app.prod.local $marker
+        EOF
+        cp "$tmp" /etc/hosts && rm -f "$tmp"
+        echo "updated /etc/hosts — todo-app.dev.local -> .230, todo-app.prod.local -> .240"
+
   k8s:trivy:
     desc: Trivy misconfiguration scan of the Helm chart (HIGH/CRITICAL)
     preconditions:
@@ -430,34 +580,29 @@ tasks:
         echo "next: task argo:add-gitea-repo  then  task gitea:ship"
 
   argo:add-gitea-repo:
-    desc: 'Wire this app into Argo CD on each cluster ({{.ARGO_CLUSTERS}}): register the repo credential + apply its Applications (deps + app)'
+    desc: 'Onboarding notice — in the floci-EKS model, Argo CD is bootstrapped INSIDE each EKS cluster by the pipeline (eks:bootstrap), not on kind. Prints the /etc/hosts entries to ensure.'
     cmds:
       - |
         set -e
-        for c in {{.ARGO_CLUSTERS}}; do
-          # 1) repository credential so Argo can read the app repo
-          kubectl --context "kind-$c" -n argocd apply -f - <<EOF >/dev/null
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: repo-{{.GITEA_REPO_NAME}}
-          namespace: argocd
-          labels:
-            argocd.argoproj.io/secret-type: repository
-        stringData:
-          type: git
-          name: {{.GITEA_REPO_NAME}}
-          url: {{.GITEA_INCLUSTER_URL}}/{{.GITEA_NS}}/{{.GITEA_REPO_NAME}}.git
-          username: {{.GITEA_USER}}
-          password: {{.GITEA_PASSWORD}}
-        EOF
-          # 2) the app's Argo Applications for this cluster (deps then app)
-          kubectl --context "kind-$c" -n argocd apply \
-            -f infra/k8s/gitops/applications/dependencies-$c.yaml \
-            -f infra/k8s/gitops/applications/todo-app-$c.yaml >/dev/null
-          echo "kind-$c: registered repo + applied Applications (dependencies-$c, todo-app-$c)"
-        done
-        echo "next: task gitea:ship  (Applications stay Unknown/Failed until the first ship adds content)"
+        cat <<'TXT'
+        ┌─ floci-EKS deploy model ──────────────────────────────────────────────┐
+        │ Each floci-provisioned EKS (k3s) cluster is self-contained: the        │
+        │ DEV(AUTO) pipeline (ci-cd.yml) and PROD(MANUAL) pipeline (promote.yml)  │
+        │ run `task eks:bootstrap` AFTER `terragrunt apply`, which installs       │
+        │ MetalLB + ingress-nginx + Argo CD INTO the cluster and registers the    │
+        │ repo + Applications. So there is nothing to register on the kind        │
+        │ clusters here — just ship.                                             │
+        └────────────────────────────────────────────────────────────────────────┘
+
+        /etc/hosts ownership (the EKS services live on their own MetalLB IPs,
+        outside the kind pools):
+          • local-gitops writes (platform DNS): gitea .200, grafana .210/.220,
+            argo.dev.local .230, argo.prod.local .240
+          • THIS repo writes (app DNS):  sudo task eks:hosts
+            → todo-app.dev.local .230, todo-app.prod.local .240
+
+        next: sudo task eks:hosts  then  task gitea:ship   (DEV(AUTO): ci -> terraform -> cd)
+        TXT
 
   # --- local CI/CD loop (push to lab Gitea; no reinstall) -------------------
   gitea:ship:

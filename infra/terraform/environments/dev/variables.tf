@@ -47,3 +47,21 @@ variable "bedrock_model_ids" {
     "anthropic.claude-3-haiku-20240307-v1:0",
   ]
 }
+
+variable "bedrock_validate_models" {
+  description = "Validate Bedrock models via the foundation-model data source (real AWS). Set false on floci, which lacks the Bedrock management API."
+  type        = bool
+  default     = true
+}
+
+variable "floci" {
+  description = "Target the local floci emulator. Disables the modules floci (LocalStack community) can't apply — aurora, redis (ElastiCache), cognito, cdn (CloudFront), route53 — so the app uses in-cluster Postgres/Redis + DEBUG dev-auth, while floci still provisions vpc/eks/ecr/iam/secrets/sqs-sns/eventbridge/s3/kms/bedrock."
+  type        = bool
+  default     = false
+}
+
+variable "floci_endpoint" {
+  description = "floci (LocalStack) endpoint; the terragrunt-generated floci provider override targets it. Unused on real AWS."
+  type        = string
+  default     = "http://localhost:4566"
+}

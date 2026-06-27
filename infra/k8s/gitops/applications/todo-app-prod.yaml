@@ -1,5 +1,7 @@
-# Argo CD Application — todo-app on the prod cluster. See todo-app-dev.yaml for
-# the onboarding contract; drop a copy into platform-config/envs/prod/.
+# Argo CD Application — todo-app on the prod floci-EKS (k3s) cluster. The EKS
+# cluster runs its own Argo CD (bootstrapped by the promote workflow) and syncs
+# this Application in-cluster. See todo-app-dev.yaml for the onboarding contract;
+# drop a copy into platform-config/envs/prod/.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -20,6 +22,7 @@ spec:
       valueFiles:
         - values.yaml
         - values-prod.yaml
+        - values-floci.yaml
       parameters:
         - name: namespaceConfig.create
           value: "false"

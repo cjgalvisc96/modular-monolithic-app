@@ -12,3 +12,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_model_validation" {
+  description = "Look up each model via the Bedrock foundation-model data source (validates availability). Set false on emulators without the Bedrock management API (e.g. floci)."
+  type        = bool
+  default     = true
+}
