@@ -351,9 +351,12 @@ tasks:
 
   # --- k8s ------------------------------------------------------------------
   k8s:expose-todo-db:
-    desc: 'Port-forward the dev todo-app Postgres to localhost:15432 (DBeaver/psql: todo/todo, db todo)'
+    desc: 'Port-forward the todo-app Postgres on the floci-EKS cluster (ENV=dev|prod) to localhost:15432 (DBeaver/psql: todo/todo, db todo)'
     cmds:
-      - kubectl --context kind-dev -n todo-app port-forward svc/postgres 15432:5432
+      # Postgres now runs on the floci-EKS cluster, not kind — use its kubeconfig.
+      - task: eks:kubeconfig
+        vars: { ENV: "{{.ENV}}" }
+      - KUBECONFIG=/tmp/floci-eks-{{.ENV}}.kubeconfig kubectl -n todo-app port-forward svc/postgres 15432:5432
 
   # --- floci-EKS cluster (the k3s container Terraform/Terragrunt spins up).
   # Ownership split: THIS repo owns the cluster's network (MetalLB/ingress) and
