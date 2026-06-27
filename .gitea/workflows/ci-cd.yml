@@ -5,11 +5,16 @@ name: CI/CD
 # coverage suite pass first. (Gitea 1.22 has no cross-workflow `workflow_run`,
 # so ordering is expressed as job dependencies in a single workflow.)
 #
-# CI runs on pushes and PRs to main. CD runs only on pushes to main, after CI.
+# CI runs on every push (and PR) to main. CD runs only on pushes to main, after
+# CI. There is deliberately NO `paths:` filter on the push trigger: in the lab,
+# `task gitea:ship` force-pushes whatever HEAD is, and every ship must deploy —
+# a `paths:` filter would silently skip the pipeline when the last commit only
+# touched docs/Taskfile (which is exactly what happens during onboarding). Loop
+# prevention is the [skip ci] in the CD bump commit (honoured by Gitea), not paths.
+#
 # No PostgreSQL/Docker is needed for the tests: the suite is unit + integration
 # (integration on SQLite; the RLS isolation test self-skips without
-# TEST_DATABASE_URL). The values-dev.yaml bump CD commits carries [skip ci]
-# (honoured by Gitea), so it never re-triggers the pipeline.
+# TEST_DATABASE_URL).
 #
 # Both jobs run on the host act_runner (runs-on: lab): host networking + the
 # host docker daemon, so floci is at localhost:4566 and `kind load` reaches the
@@ -18,25 +23,8 @@ name: CI/CD
 on:
   push:
     branches: [main]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "migrations/**"
-      - "Dockerfile"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".gitea/workflows/ci-cd.yml"
-      - ".gitea/actions/setup-lab/**"
   pull_request:
     branches: [main]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "migrations/**"
-      - "Dockerfile"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".gitea/workflows/ci-cd.yml"
 
 permissions:
   contents: write
