@@ -282,14 +282,20 @@ tasks:
       - trivy config --severity HIGH,CRITICAL --exit-code 1 --ignorefile {{.TF_DIR}}/.trivyignore --skip-dirs {{.TF_DIR}}/local {{.TF_DIR}}
 
   terraform:costs:
-    desc: 'Infracost estimate for an environment (ENV=dev|prod). First run prompts a free login.'
+    desc: 'Infracost estimate for all stacks, broken down per project (dev, prod, local). First run prompts a free login.'
     preconditions:
       - sh: command -v infracost
         msg: "Infracost not found. Install: curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh"
     cmds:
-      # `scan` replaces the deprecated `breakdown`; path is positional.
+      # `scan` replaces the deprecated `breakdown`; path is positional, and the
+      # infra/terraform stack is scanned as a whole. The environments reference
+      # their modules via ../../modules, so infracost must scan a path that
+      # CONTAINS both `environments/` and `modules/` — scanning a single
+      # environments/<env> subdir makes those relative module sources resolve
+      # "outside the repository" and every module fails to load. infracost's
+      # per-project breakdown still reports dev / prod / local separately.
       # If unauthenticated, infracost itself prompts the free browser login.
-      - infracost scan {{.TF_DIR}}/environments/{{.ENV}}
+      - infracost scan {{.TF_DIR}}
 
   IaC:verify:
     desc: 'Verify the deployed IaC for an env is live on floci (ENV=dev|prod): reads the Terragrunt state (floci S3, or local fallback) and probes each managed resource + the EKS cluster/node. Read-only.'
