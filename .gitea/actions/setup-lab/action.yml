@@ -1,8 +1,8 @@
 name: Setup lab tools
 description: >-
   Install the pinned CLIs the lab CD/promote jobs need (aws, kind, yq, kubectl,
-  helm, terraform, terragrunt, task). docker and git already ship in the job
-  image. Versions track the local-gitops lab.
+  helm, terraform, terragrunt, task, trivy). docker and git already ship in the
+  job image. Versions track the local-gitops lab.
 
 runs:
   using: composite
@@ -61,4 +61,15 @@ runs:
         fi
         if ! command -v task >/dev/null 2>&1; then
           sh -c "$(curl -fsSL https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin "$TASK_VERSION"
+        fi
+
+    - name: Install trivy
+      shell: bash
+      run: |
+        set -euo pipefail
+        TRIVY_VERSION=v0.58.1
+        # trivy: IaC misconfiguration scanner (task terraform:trivy).
+        if ! command -v trivy >/dev/null 2>&1; then
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin "$TRIVY_VERSION"
         fi

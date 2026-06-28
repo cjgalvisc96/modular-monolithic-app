@@ -51,7 +51,7 @@ module "vpc" {
   azs                  = ["${var.aws_region}a", "${var.aws_region}b", "${var.aws_region}c"]
   public_subnet_cidrs  = ["10.20.0.0/20", "10.20.16.0/20", "10.20.32.0/20"]
   private_subnet_cidrs = ["10.20.128.0/20", "10.20.144.0/20", "10.20.160.0/20"]
-  single_nat_gateway   = false # prod: HA NAT per AZ
+  single_nat_gateway   = false      # prod: HA NAT per AZ
   enable_nat           = !var.floci # floci can't ReplaceRoute; k3s needs no NAT
   eks_cluster_name     = local.name
   tags                 = local.tags

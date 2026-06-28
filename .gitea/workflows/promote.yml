@@ -65,6 +65,16 @@ jobs:
 
       - uses: ./.gitea/actions/setup-lab
 
+      # --- static IaC checks (fail fast before provisioning prod) ---
+      - name: Format check (terraform fmt + terragrunt hcl)
+        run: task terraform:fmt
+
+      - name: Validate modules (offline, no backend)
+        run: task terraform:validate
+
+      - name: Security scan (trivy)
+        run: task terraform:trivy
+
       - name: Restore Terragrunt state from floci S3
         run: |
           set -euo pipefail
