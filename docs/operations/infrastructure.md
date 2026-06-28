@@ -24,12 +24,13 @@ Cloud infrastructure is defined with **Terraform** modules, composed per environ
 | `sqs-sns` | Queues / notifications |
 | `bedrock` | AI capability consumed by the `ai` context |
 | `iam` | Least-privilege IRSA roles (see below) |
+| `security-baseline` | Account detective controls — CloudTrail, GuardDuty, Security Hub, IAM Access Analyzer |
 
 ### floci gating
 
 On real AWS (`floci=false`) every module applies. On **floci** (`floci=true`) the modules that need a
 managed control plane or an AWS-only service are gated off with `count = var.floci ? 0 : 1` — `vpc`,
-`eks`, `aurora`, `redis`, `cognito`, `cdn`, `route53` and `iam`. **`vpc` and `eks` are gated off
+`eks`, `aurora`, `redis`, `cognito`, `cdn`, `route53`, `iam` and `security-baseline`. **`vpc` and `eks` are gated off
 because the platform (`local-gitops`) owns the Kubernetes cluster** (a k3s container that emulates
 EKS), so this app never creates one locally. What *does* apply on floci is the set of app cloud
 resources LocalStack can emulate: `ecr`, `secrets-manager`, `eventbridge`, `sqs-sns`, `s3` and

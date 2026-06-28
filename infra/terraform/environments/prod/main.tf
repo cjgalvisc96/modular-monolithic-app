@@ -231,3 +231,15 @@ module "iam" {
 
   tags = local.tags
 }
+
+############################################
+# Security & audit baseline
+############################################
+module "security_baseline" {
+  source = "../../modules/security-baseline"
+  count  = var.floci ? 0 : 1
+
+  name                       = local.name
+  trail_bucket_force_destroy = false
+  tags                       = local.tags
+}

@@ -67,3 +67,4 @@ nav:
       - GitOps Deployment: operations/gitops.md
       - Observability: operations/observability.md
       - Infrastructure: operations/infrastructure.md
+  - Enterprise: enterprise.md
