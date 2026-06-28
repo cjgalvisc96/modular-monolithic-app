@@ -235,7 +235,13 @@ tasks:
           terraform -chdir={{.TF_DIR}}/local apply -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}}
         else
           command -v terragrunt >/dev/null 2>&1 || { echo "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/" >&2; exit 1; }
-          ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt apply -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}} )
+          # floci/LocalStack races on concurrent creates: e.g. 3 public
+          # aws_route_table_association against one route table fire at once and
+          # the Nth never reports 'associated', hanging until the 5m timeout.
+          # Serialize the graph on floci; real AWS keeps the default parallelism.
+          PFLAG=""
+          [ "$(printf '%s' "${FLOCI:-false}" | tr '[:upper:]' '[:lower:]')" = "true" ] && PFLAG="-parallelism=1"
+          ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt apply -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}} $PFLAG )
         fi
 
   terraform:destroy:
@@ -250,7 +256,10 @@ tasks:
           terraform -chdir={{.TF_DIR}}/local destroy -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}}
         else
           command -v terragrunt >/dev/null 2>&1 || { echo "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/" >&2; exit 1; }
-          ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt destroy -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}} )
+          # Serialize on floci (same LocalStack concurrency races as apply).
+          PFLAG=""
+          [ "$(printf '%s' "${FLOCI:-false}" | tr '[:upper:]' '[:lower:]')" = "true" ] && PFLAG="-parallelism=1"
+          ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt destroy -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}} $PFLAG )
         fi
 
   terraform:test:
