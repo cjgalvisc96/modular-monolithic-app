@@ -34,6 +34,12 @@ The OTel Collector configuration lives at `observability/otel-collector-config.y
 traces and metrics from the application and exports them to the backends — **Tempo** for traces and
 **Prometheus** for metrics.
 
+For local-only work the standalone stack (`observability/docker-compose.observability.yml`) runs the
+Collector + Tempo/Prometheus/Grafana. In the GitOps lab the backends are **owned by the platform** —
+`local-gitops`' `task install` brings up **Grafana** (alongside Argo CD) on each floci-EKS cluster
+**before** this app deploys; the app only emits telemetry to them. Grafana is reached over **HTTP**
+(`http://`), not HTTPS.
+
 ## Dashboards
 
 Grafana dashboards under `observability/grafana/dashboards/` visualize the golden signals:

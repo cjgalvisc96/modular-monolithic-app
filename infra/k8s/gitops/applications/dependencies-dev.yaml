@@ -1,10 +1,3 @@
-# Argo CD Application — local datastores (Postgres + Redis) for todo-app on dev.
-#
-# Sourced from THIS repo (infra/k8s/dependencies/base), not the platform's
-# gitops-apps repo: the app owns its own datastores. sync-wave 1 places these
-# before the app (wave 2) so they are healthy before the chart's pre-install
-# db-init (Atlas) hook runs. Drop a copy into platform-config/envs/dev/.
-# Synced in-cluster by the self-contained Argo CD on the floci-EKS cluster.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

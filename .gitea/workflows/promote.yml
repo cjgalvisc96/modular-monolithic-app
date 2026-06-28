@@ -1,29 +1,6 @@
 name: Promote to prod
 
-# PROD (MANUAL) pipeline — workflow_dispatch only. Launch this by hand once the
-# DEV(AUTO) pipeline (ci-cd.yml) is green. It mirrors dev:
-#
-#   terraform  provision the PROD cloud on floci via Terragrunt (ENV=prod), the
-#              full infra/terragrunt/prod stack. FLOCI=true disables the modules
-#              LocalStack-community can't apply, same as dev. State persists in
-#              floci S3 between runs.
-#   cd         take a tag already proven on dev (default: whatever values-dev.yaml
-#              points at), pull it back from the floci ECR if this host pruned it,
-#              import it into the floci-EKS prod cluster, bootstrap that cluster's
-#              own GitOps stack (MetalLB + ingress-nginx + Argo CD + Applications),
-#              then bump values-prod.yaml. The in-EKS Argo syncs in-cluster.
-#
-# This is the ONLY path that changes prod. No app build happens here — the image
-# was built by ci-cd.yml's cd job and lives in the floci ECR. The manual launch
-# is the approval gate (Gitea has no environment protection rules).
-#
-# Runs on the host act_runner (runs-on: lab): host networking + host docker, so
-# floci is at localhost:4566 and `docker exec` reaches the prod k3s container.
-
 on:
-  # PROD is manual: launch from the Gitea Actions UI ("Run workflow") or via
-  # `task gitea:promote` (the dispatch API). Both require Gitea >= 1.24 — the lab
-  # pins chart 12.x for exactly this. Optional `tag` input; default = current dev.
   workflow_dispatch:
     inputs:
       tag:
@@ -49,7 +26,6 @@ env:
 
 jobs:
   terraform:
-    # Provision the PROD floci cloud via Terragrunt before deploying.
     runs-on: lab
     concurrency:
       group: tf-prod
@@ -65,7 +41,6 @@ jobs:
 
       - uses: ./.gitea/actions/setup-lab
 
-      # --- static IaC checks (fail fast before provisioning prod) ---
       - name: Format check (terraform fmt + terragrunt hcl)
         run: task terraform:fmt
 
@@ -103,7 +78,6 @@ jobs:
           fi
 
   cd:
-    # Promote the dev-proven image onto the floci-EKS prod cluster.
     needs: terraform
     runs-on: lab
     env:
@@ -121,8 +95,6 @@ jobs:
         id: vars
         run: |
           set -euo pipefail
-          # workflow_dispatch input if given (UI on Gitea >= 1.23), else promote
-          # whatever dev currently runs (values-dev.yaml on main).
           tag="${{ github.event.inputs.tag }}"
           if [ -z "$tag" ] || [ "$tag" = "latest" ]; then
             tag="$(yq '.image.tag' infra/k8s/helm/values-dev.yaml)"
@@ -150,8 +122,7 @@ jobs:
       - name: Import the image into the floci-EKS prod containerd
         run: task eks:load-image ENV=prod IMAGE_TAG=${{ steps.vars.outputs.tag }}
 
-      # Bump + push BEFORE registering the Argo Applications, so Argo's first
-      # sync targets the loaded tag (avoids the db-init ImagePullBackOff wedge).
+      # Bump + push BEFORE registering the Argo Applications, so Argo's first sync targets the loaded tag (avoids the db-init ImagePullBackOff wedge). [skip ci] stops the bump commit re-triggering CD.
       - name: Bump values-prod.yaml and commit (so Argo's first sync uses the loaded tag)
         run: |
           set -euo pipefail
@@ -170,10 +141,6 @@ jobs:
           fi
 
       - name: Register the app with the floci-EKS prod Argo CD
-        # The PLATFORM (local-gitops at $LOCAL_GITOPS_DIR) already created +
-        # bootstrapped the prod cluster at `task install`. Promote only registers
-        # the app's repo cred + Argo Applications (APP_DIR=this checkout). Runs
-        # AFTER the bump so Argo's first sync uses the loaded tag.
         run: |
           set -euo pipefail
           cd "$LOCAL_GITOPS_DIR"

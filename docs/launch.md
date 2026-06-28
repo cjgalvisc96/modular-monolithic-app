@@ -22,9 +22,13 @@ Stop it with `task docker:down`. That's all you need to develop and test.
 ## Option B — Full GitOps deploy (on the local lab)
 
 Run the app the way production does: built by a pipeline and deployed by **Argo CD**, on the
-[local-gitops](https://github.com/cjgalvisc96/local-gitops) lab.
+[local-gitops](https://github.com/cjgalvisc96/local-gitops) lab. The **platform owns the clusters** —
+`task install` creates both floci-EKS clusters (dev/prod, as k3s containers) and bootstraps each with
+ingress-nginx, **Argo CD and Grafana**, so they are already running before this app deploys. This app
+only provisions its own cloud resources and registers its Argo Applications onto the running clusters.
 
-**1. Build the lab** — once, in the local-gitops repo:
+**1. Build the lab** — once, in the local-gitops repo. This brings up the dev + prod clusters with
+Argo CD and Grafana already running:
 
 ```bash
 cd ../local-gitops
@@ -35,30 +39,40 @@ task install
 
 ```bash
 task gitea:create-repo      # create the app's repo in the lab's Gitea
-task argo:add-gitea-repo    # register it with Argo CD (dev + prod) and apply its Applications
-task gitea:ship             # push the code → pipeline builds + pushes the image → Argo deploys
+sudo task eks:hosts         # add /etc/hosts: todo-app.dev.local → .230, todo-app.prod.local → .240
+task gitea:ship             # DEV (auto): push → pipeline (ci → terraform → cd) → Argo deploys
 ```
 
-**3. Iterate** — for every change:
+`gitea:ship` pushes to the lab Gitea `main`, which fires the **DEV** pipeline. Argo CD (already
+running on the dev cluster) syncs the chart.
+
+**3. Promote to prod** — when dev looks good:
+
+```bash
+task gitea:promote          # PROD (manual): dispatch promote.yml → deploys the dev-proven tag to prod
+```
+
+**4. Iterate** — for every change:
 
 ```bash
 git commit -am "my change"
-task gitea:ship             # push → pipeline → Argo redeploys
+task gitea:ship             # push → DEV pipeline → Argo redeploys
 task gitea:runs             # see the pipeline run (or the Actions URL)
 ```
 
-The app appears at <http://todo-app.dev.local>.
+The app appears at <http://todo-app.dev.local> (dev, `.230`) and <http://todo-app.prod.local>
+(prod, `.240`) — HTTP, not HTTPS. Argo CD and Grafana are owned by the platform.
 
 ## Start over (from scratch)
 
 ```bash
 # in the local-gitops repo
-task prune && task install
+task prune && task install   # rebuild both clusters + Argo + Grafana
 # in this repo
-task prune                  # optional: clears the Option-A standalone stack
+task prune                   # optional: clears the Option-A standalone stack
 task gitea:create-repo
-task argo:add-gitea-repo
-task gitea:ship
+task gitea:ship              # DEV
+task gitea:promote           # PROD
 ```
 
 ## Which one should I use?

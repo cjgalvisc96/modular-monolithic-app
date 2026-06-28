@@ -25,6 +25,16 @@ Cloud infrastructure is defined with **Terraform** modules, composed per environ
 | `bedrock` | AI capability consumed by the `ai` context |
 | `iam` | Least-privilege IRSA roles (see below) |
 
+### floci gating
+
+On real AWS (`floci=false`) every module applies. On **floci** (`floci=true`) the modules that need a
+managed control plane or an AWS-only service are gated off with `count = var.floci ? 0 : 1` — `vpc`,
+`eks`, `aurora`, `redis`, `cognito`, `cdn`, `route53` and `iam`. **`vpc` and `eks` are gated off
+because the platform (`local-gitops`) owns the Kubernetes cluster** (a k3s container that emulates
+EKS), so this app never creates one locally. What *does* apply on floci is the set of app cloud
+resources LocalStack can emulate: `ecr`, `secrets-manager`, `eventbridge`, `sqs-sns`, `s3` and
+`bedrock` (model scoping). See `infra/terraform/environments/{dev,prod}/main.tf`.
+
 ## Cognito module
 
 `modules/cognito/` provisions the identity layer that backs the whole tenancy and auth chain:
@@ -72,12 +82,15 @@ one-shot init containers before the API — the same "DB init decoupled from API
 Helm Job ([Deployment](deployment.md)). The managed control-plane services the cloud stacks use
 (VPC, EKS, CloudFront, Cognito, Route53) cannot run on floci and are absent locally.
 
-In the [`local-gitops`](https://github.com/cjgalvisc96/local-gitops) lab the **same** stack is
-applied against the lab's floci (`:4566`) two ways — `install.sh` runs it at bootstrap, and the
-`tf-floci` Gitea pipeline runs it for ongoing changes (`workflow_dispatch`: `plan`/`apply`/`destroy`).
-Both share one Terraform state in floci S3, so they don't re-create each other's resources. There the
-ECR repo + SSM params are what matter (the kind clusters use in-namespace Postgres/Redis, so the
-stack's Aurora/ElastiCache are unused). See [CI/CD](cicd.md).
+In the [`local-gitops`](https://github.com/cjgalvisc96/local-gitops) lab it is the **per-environment
+Terragrunt stacks** (`infra/terraform/environments/{dev,prod}`, wired by `infra/terragrunt/{dev,prod}`)
+that are applied against the lab's floci (`:4566`) — by the `terraform` **job inside the pipeline**:
+`ci-cd.yml` runs `terragrunt apply ENV=dev` for the DEV flow and `promote.yml` runs `ENV=prod` for the
+PROD flow. With the floci gating above, that apply creates **only the app cloud resources** (ECR,
+Secrets Manager, SQS/SNS, EventBridge, S3, Bedrock scoping) — `vpc`/`eks` and the other managed
+services are skipped because the platform owns the k3s cluster and the in-cluster Postgres/Redis back
+the app. The job keeps its Terraform state in floci S3 (per env), so successive runs don't re-create
+resources. See [CI/CD](cicd.md).
 
 ## Infrastructure tooling
 

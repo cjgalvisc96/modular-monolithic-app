@@ -72,9 +72,12 @@ are carried in `values-dev.yaml` vs `values-prod.yaml` — which the [CI/CD](cic
 ## Local workflow ("floci")
 
 `infra/k8s/gitops/` integrates with [local-gitops](https://github.com/cjgalvisc96/local-gitops)
-to simulate the multi-cluster topology locally: pull-based Argo CD (app-of-apps), the app's own
-Helm chart and datastores, secrets via the ESO `aws-ssm` store, and floci as the local AWS. The app
-is self-contained and the platform stays generic, so onboarding is a near-zero, repeatable change.
+to mirror the multi-cluster topology locally. The **platform owns the clusters** — `task install`
+creates both floci-EKS (k3s) clusters and bootstraps each with Argo CD and Grafana — so this app only
+provisions its own cloud resources and registers its Argo Applications onto the running clusters.
+Argo CD then reconciles the app's own Helm chart and datastores; secrets come from the ESO `aws-ssm`
+store on real AWS (or directly from `values-floci.yaml` on floci), with floci as the local AWS. The
+app is self-contained and the platform stays generic, so onboarding is a near-zero, repeatable change.
 See **[GitOps Deployment](gitops.md)** for the full contract and onboarding steps.
 
 For a lighter loop, the docker-compose stack (`task docker:up`) reproduces the same ordering with

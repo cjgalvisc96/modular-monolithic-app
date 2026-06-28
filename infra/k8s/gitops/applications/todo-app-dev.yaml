@@ -1,13 +1,3 @@
-# Argo CD Application — todo-app on the dev floci-EKS (k3s) cluster.
-#
-# The floci-provisioned EKS cluster is self-contained: it runs its OWN Argo CD
-# (installed by the platform's `task eks:bootstrap ENV=dev` in the pipeline,
-# after the Terragrunt apply), which syncs this Application IN-CLUSTER. The
-# destination is therefore the in-cluster API.
-#
-# This repo owns the manifest; the platform's eks:bootstrap applies it (kubectl)
-# from APP_DIR and adds the repo credential. The 172.18.* repoURL is the
-# platform's kind-bridge Gitea LB IP.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

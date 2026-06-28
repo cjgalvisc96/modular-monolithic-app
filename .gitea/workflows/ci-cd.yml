@@ -1,35 +1,5 @@
 name: CI/CD
 
-# DEV (AUTO) pipeline, ordered by job dependencies: ci -> terraform -> cd.
-#
-#   ci         lint / types / dead-code / architecture / tests+coverage (>=97%)
-#   terraform  provision the DEV cloud on floci via Terragrunt (the full
-#              infra/terragrunt/dev stack: VPC, EKS, ECR, Secrets, SQS/SNS,
-#              EventBridge, S3, KMS, Bedrock scoping). FLOCI=true disables the
-#              modules LocalStack-community can't apply (Aurora/ElastiCache/
-#              Cognito/CloudFront/Route53) — the app uses in-cluster Postgres/
-#              Redis + DEBUG dev-auth instead. State lives in floci S3 between
-#              runs (a fresh checkout has no local state).
-#   cd         build the image, import it into the floci-EKS cluster containerd,
-#              bootstrap the cluster's OWN GitOps stack (MetalLB + ingress-nginx
-#              + Argo CD + the repo & Applications), then bump values-dev.yaml.
-#              The Argo CD running INSIDE the floci-EKS cluster syncs the chart
-#              in-cluster — exactly like the kind dev/prod clusters do.
-#
-# Topology: each floci-provisioned EKS (k3s) cluster is self-contained — its own
-# Argo CD + ingress (dev LB IP 172.18.255.230). Gitea + Grafana stay on the kind
-# management/observability plane.
-#
-# PROD is never touched here — promote.yml (manual) does prod, after dev is green.
-#
-# Gitea 1.22 has no cross-workflow `workflow_run`, so ci/terraform/cd must be
-# job dependencies in one workflow. No `paths:` filter: `task gitea:ship`
-# force-pushes whatever HEAD is and every ship must deploy; loop prevention is
-# the [skip ci] in the CD bump commit. The whole pipeline runs on the host
-# act_runner (runs-on: lab): host networking + host docker, so floci is at
-# localhost:4566, the kind clusters are reachable, and `docker exec` reaches the
-# floci-EKS k3s container.
-
 on:
   push:
     branches: [main]
@@ -42,15 +12,13 @@ permissions:
 env:
   UV_VERSION: "0.11.19"
   TASK_VERSION: "v3.40.1"
-  # floci (local AWS) — credentials are the LocalStack defaults.
   AWS_ACCESS_KEY_ID: test
   AWS_SECRET_ACCESS_KEY: test
   AWS_REGION: us-east-1
   AWS_ENDPOINT_URL: http://localhost:4566
   FLOCI: "true"
   FLOCI_ENDPOINT: http://localhost:4566
-  # Lab-only Aurora master password (floci doesn't run Aurora; it just feeds the
-  # Secrets Manager entry). Safe to inline for a throwaway local emulator.
+  # Lab-only throwaway emulator password — floci doesn't run Aurora.
   TF_VAR_db_master_password: todolocalpw1
 
 jobs:
@@ -88,9 +56,7 @@ jobs:
         run: task test:coverage
 
   terraform:
-    # Provision the DEV floci cloud via Terragrunt BEFORE deploying. State is
-    # kept in floci S3 between runs (the Terragrunt floci backend is local, so a
-    # fresh checkout would otherwise re-create everything and fail on "exists").
+    # State is kept in floci S3 between runs (the Terragrunt floci backend is local).
     needs: ci
     if: ${{ github.event_name == 'push' }}
     runs-on: lab
@@ -106,7 +72,6 @@ jobs:
 
       - uses: ./.gitea/actions/setup-lab
 
-      # --- static IaC checks (fail fast before provisioning) ---
       - name: Format check (terraform fmt + terragrunt hcl)
         run: task terraform:fmt
 
@@ -144,7 +109,6 @@ jobs:
           fi
 
   cd:
-    # Build + deploy onto the floci-EKS workload cluster, after the infra exists.
     needs: terraform
     if: ${{ github.event_name == 'push' }}
     runs-on: lab
@@ -154,9 +118,6 @@ jobs:
     env:
       APP_IMAGE: local/todo-app
       ECR_REPO: todo-app
-      # The platform (local-gitops) is bind-mounted here by its runner config;
-      # the cd job calls its `task eks:bootstrap` (MetalLB + ingress-nginx + Argo
-      # CD + our Applications) with APP_DIR=this checkout.
       LOCAL_GITOPS_DIR: /opt/local-gitops
     steps:
       - uses: actions/checkout@v4
@@ -186,10 +147,7 @@ jobs:
       - name: Import the image into the floci-EKS containerd
         run: task eks:load-image ENV=dev IMAGE_TAG=${{ steps.vars.outputs.tag }}
 
-      # Bump the tag + push BEFORE registering the Argo Applications, so the
-      # in-EKS Argo's FIRST sync already targets the loaded image (otherwise it
-      # syncs the pre-bump tag, whose image was never loaded, and wedges the
-      # db-init Job on ImagePullBackOff).
+      # Bump + push BEFORE registering the Argo Applications, so Argo's first sync targets the loaded image (else the db-init Job wedges on ImagePullBackOff). [skip ci] stops the bump commit re-triggering CD.
       - name: Bump values-dev.yaml and commit (so Argo's first sync uses the loaded tag)
         run: |
           set -euo pipefail
@@ -208,19 +166,12 @@ jobs:
           fi
 
       - name: Register the app with the floci-EKS Argo CD
-        # The PLATFORM (local-gitops, bind-mounted at $LOCAL_GITOPS_DIR) already
-        # created + bootstrapped the cluster (MetalLB + ingress + Argo +
-        # observability) at `task install`. The app only registers its repo cred
-        # + Argo Applications, passing APP_DIR=this checkout. Runs AFTER the bump
-        # so Argo's first sync points at the loaded tag.
         run: |
           set -euo pipefail
           cd "$LOCAL_GITOPS_DIR"
           task eks:register-app ENV=dev APP_DIR="$GITHUB_WORKSPACE"
 
       - name: Handoff to PROD (manual)
-        # DEV is green. PROD is the manual gate: launch the "Promote to prod"
-        # workflow (terraform prod -> CD-to-EKS prod) when you're ready.
         run: |
           echo "✅ DEV deployed to floci-EKS (tag ${{ steps.vars.outputs.tag }})."
           echo "▶ PROMOTE TO PROD (manual): ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions  →  'Promote to prod'  →  Run workflow"

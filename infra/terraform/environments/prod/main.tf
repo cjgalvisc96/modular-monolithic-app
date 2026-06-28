@@ -30,9 +30,7 @@ locals {
     ManagedBy   = "terraform"
   }
 
-  # floci fallbacks: aurora/redis/cognito are disabled on floci (LocalStack
-  # community can't apply them), so the app uses in-cluster Postgres/Redis and
-  # DEBUG dev-auth. one(module.x[*].out) is null when the module count is 0.
+  # floci disables aurora/redis/cognito (LocalStack can't apply them); one(...) is null when count is 0.
   db_host                    = var.floci ? "postgres" : one(module.aurora[*].endpoint)
   db_port                    = var.floci ? 5432 : one(module.aurora[*].port)
   db_name                    = var.floci ? "todo" : one(module.aurora[*].database_name)
@@ -40,14 +38,9 @@ locals {
   aurora_cluster_resource_id = var.floci ? "*" : one(module.aurora[*].cluster_resource_id)
 }
 
-############################################
-# Network — multi-AZ, NAT per AZ
-############################################
 module "vpc" {
   source = "../../modules/vpc"
-  # floci: the EKS workload cluster is a k3s container the PLATFORM (local-gitops)
-  # stands up, not a real EKS in this VPC — so the VPC (and EKS below) are parity-
-  # only and disabled on floci, exactly like aurora/redis/cognito.
+  # floci: platform (local-gitops) owns the k3s workload cluster, so VPC/EKS are parity-only here.
   count = var.floci ? 0 : 1
 
   name                 = local.name
@@ -55,15 +48,12 @@ module "vpc" {
   azs                  = ["${var.aws_region}a", "${var.aws_region}b", "${var.aws_region}c"]
   public_subnet_cidrs  = ["10.20.0.0/20", "10.20.16.0/20", "10.20.32.0/20"]
   private_subnet_cidrs = ["10.20.128.0/20", "10.20.144.0/20", "10.20.160.0/20"]
-  single_nat_gateway   = false      # prod: HA NAT per AZ
+  single_nat_gateway   = false
   enable_nat           = !var.floci # floci can't ReplaceRoute; k3s needs no NAT
   eks_cluster_name     = local.name
   tags                 = local.tags
 }
 
-############################################
-# EKS (OIDC enabled for IRSA) — larger nodes
-############################################
 module "eks" {
   source = "../../modules/eks"
   count  = var.floci ? 0 : 1 # floci: k3s container owned by the platform (see vpc)
@@ -75,7 +65,7 @@ module "eks" {
   private_subnet_ids = one(module.vpc[*].private_subnet_ids)
   public_subnet_ids  = one(module.vpc[*].public_subnet_ids)
 
-  endpoint_public_access = false # prod: private API endpoint
+  endpoint_public_access = false
   node_instance_types    = ["m6i.xlarge"]
   node_desired_size      = 3
   node_min_size          = 3
@@ -83,25 +73,16 @@ module "eks" {
   tags                   = local.tags
 }
 
-############################################
-# Container registry — immutable tags
-############################################
 module "ecr" {
   source = "../../modules/ecr"
 
-  # Env-scoped name (todo-app-prod) so it doesn't collide with the dev stack's
-  # `todo-app` repo on the single shared floci account. The promote pipeline
-  # pulls the dev-built image from the dev `todo-app` repo, so this prod repo is
-  # parity only. On real AWS (separate accounts) both could be plain `todo-app`.
+  # Env-scoped name so it doesn't collide with the dev `todo-app` repo on the shared floci account.
   repository_name      = local.name
   image_tag_mutability = "IMMUTABLE"
   max_tagged_images    = 50
   tags                 = local.tags
 }
 
-############################################
-# Data stores — multi-AZ
-############################################
 module "aurora" {
   source = "../../modules/aurora"
   count  = var.floci ? 0 : 1
@@ -137,9 +118,6 @@ module "redis" {
   tags                       = local.tags
 }
 
-############################################
-# Identity
-############################################
 module "cognito" {
   source = "../../modules/cognito"
   count  = var.floci ? 0 : 1
@@ -152,9 +130,6 @@ module "cognito" {
   tags           = local.tags
 }
 
-############################################
-# Secrets
-############################################
 module "secrets" {
   source = "../../modules/secrets-manager"
 
@@ -172,9 +147,6 @@ module "secrets" {
   tags                    = local.tags
 }
 
-############################################
-# Async / messaging
-############################################
 module "eventbridge" {
   source = "../../modules/eventbridge"
 
@@ -191,9 +163,6 @@ module "sqs_sns" {
   tags       = local.tags
 }
 
-############################################
-# Bedrock scoping
-############################################
 module "bedrock" {
   source = "../../modules/bedrock"
 
@@ -202,9 +171,6 @@ module "bedrock" {
   tags                    = local.tags
 }
 
-############################################
-# Static assets + CDN
-############################################
 module "s3_assets" {
   source = "../../modules/s3"
 
@@ -225,9 +191,6 @@ module "cdn" {
   tags                           = local.tags
 }
 
-############################################
-# DNS
-############################################
 module "route53" {
   source = "../../modules/route53"
   count  = var.floci ? 0 : 1
@@ -248,9 +211,6 @@ module "route53" {
   tags = local.tags
 }
 
-############################################
-# Least-privilege IRSA roles
-############################################
 module "iam" {
   source = "../../modules/iam"
   count  = var.floci ? 0 : 1

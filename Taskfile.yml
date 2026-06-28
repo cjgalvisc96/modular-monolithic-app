@@ -1,12 +1,5 @@
 version: "3"
 
-# Central command runner for the TODO modular monolith.
-# Tasks follow a `scope:action` naming convention (env / check / fix / test /
-# docker / clean). Run `task` or `task help` to list everything.
-#
-# Every Python tool is invoked through `uv run` (var PY) — Python is never
-# executed directly.
-
 vars:
   PY: "uv run"
   SRC: "src/todo_app"
@@ -15,35 +8,24 @@ vars:
   TF_DIR: "infra/terraform"
   TG_DIR: "infra/terragrunt"
   ENV: '{{.ENV | default "dev"}}'
-  # --- AWS / ECR / floci (local AWS) ---
   AWS_REGION: '{{.AWS_REGION | default "us-east-1"}}'
   AWS_PROFILE_NAME: '{{.AWS_PROFILE_NAME | default "floci"}}'
-  # Our floci is independent of the local-gitops floci (:4566) — published on :4576.
   FLOCI_ENDPOINT: '{{.FLOCI_ENDPOINT | default "http://localhost:4576"}}'
-  # The local-gitops platform's floci (shared across apps) listens on :4566.
   GITOPS_FLOCI_ENDPOINT: '{{.GITOPS_FLOCI_ENDPOINT | default "http://localhost:4566"}}'
-  # --- local-gitops Gitea (push target for the local CI/CD pipeline) ---
-  # Lab defaults from local-gitops/lib/common.sh; override via env for other labs.
   GITEA_WEB: '{{.GITEA_WEB | default "http://gitea.dev.local"}}'
-  # The 'gitops' org is what install.sh creates and Argo watches (matches the
-  # repoURL in infra/k8s/gitops/applications/*). Override GITEA_NS for another.
   GITEA_NS: '{{.GITEA_NS | default "gitops"}}'
   GITEA_REPO_NAME: '{{.GITEA_REPO_NAME | default "modular-monolithic-app"}}'
   GITEA_BRANCH: '{{.GITEA_BRANCH | default "main"}}'
   GITEA_USER: '{{.GITEA_USER | default "adminlocal"}}'
   GITEA_PASSWORD: '{{.GITEA_PASSWORD | default "adminlocal1"}}'
-  # In-cluster Gitea URL Argo uses (the MetalLB git-lb IP) — must match the
-  # repoURL in infra/k8s/gitops/applications/*. Argo clusters to register on.
   GITEA_INCLUSTER_URL: '{{.GITEA_INCLUSTER_URL | default "http://172.18.255.209:3000"}}'
   ARGO_CLUSTERS: '{{.ARGO_CLUSTERS | default "dev prod"}}'
   ECR_REPO: '{{.ECR_REPO | default "todo-app"}}'
   ECR_REGISTRY: '{{.ECR_REGISTRY | default ""}}'
   IMAGE_TAG: '{{.IMAGE_TAG | default "dev"}}'
-  # Set AWS_ENDPOINT_URL (e.g. http://localhost:4566) to target floci; empty = real AWS.
   AWS_ENDPOINT_URL: '{{.AWS_ENDPOINT_URL | default ""}}'
-  # --- Atlas (DB migrations; run via the Atlas Docker image, no host install) ---
   ATLAS_IMAGE: '{{.ATLAS_IMAGE | default "arigaio/atlas:latest"}}'
-  ATLAS_NET: '{{.PROJECT}}-net' # compose network the running Postgres is on
+  ATLAS_NET: '{{.PROJECT}}-net'
   DB_URL: '{{.DB_URL | default "postgres://todo:todopassword@floci-rds-todo-aurora:5432/todo?sslmode=disable"}}'
 
 env:
@@ -62,7 +44,6 @@ tasks:
     cmds:
       - task --list-all
 
-  # --- deps -----------------------------------------------------------------
   deps:check:
     desc: Guard — verify required tools are installed before running commands
     internal: true
@@ -77,7 +58,6 @@ tasks:
           exit 1
         fi
 
-  # --- env ------------------------------------------------------------------
   env:create:
     desc: Bootstrap the virtualenv, sync all dependency groups (uv), and seed .env
     deps: [deps:check]
@@ -86,7 +66,6 @@ tasks:
       - uv sync --group dev --group test --group lint
       - '[ -f .env ] || cp .env.example .env'
 
-  # --- check (static quality gates) -----------------------------------------
   check:linter:
     desc: Run ruff (lint + import sort) and verify formatting
     cmds:
@@ -122,14 +101,12 @@ tasks:
       - task: check:quality
       - task: check:architecture
 
-  # --- fix ------------------------------------------------------------------
   fix:linter:
     desc: Auto-fix lint issues and format code (ruff)
     cmds:
       - "{{.PY}} ruff check --fix {{.SRC}} tests"
       - "{{.PY}} ruff format {{.SRC}} tests"
 
-  # --- test -----------------------------------------------------------------
   test:unit:
     desc: Run the unit test suite
     cmds:
@@ -150,20 +127,14 @@ tasks:
     cmds:
       - "{{.PY}} pytest tests/unit tests/integration --cov --cov-report=term-missing"
 
-  # --- clean ----------------------------------------------------------------
   clean:cache:
     desc: Remove venv + all Python, tooling, infra, and observability caches
     cmds:
-      # Virtualenv + Python tooling caches
       - rm -rf .venv .pytest_cache .ruff_cache .import_linter_cache .coverage coverage.xml htmlcov 2>/dev/null || true
-      # __pycache__ everywhere (skip .git)
       - find . -type d -name __pycache__ -not -path './.git/*' -prune -exec rm -rf {} + 2>/dev/null || true
-      # Terraform / Terragrunt caches
       - find . -type d \( -name .terraform -o -name .terragrunt-cache \) -prune -exec rm -rf {} + 2>/dev/null || true
-      # Observability stack data (Grafana/Prometheus/Tempo are Docker named volumes)
       - "{{.COMPOSE}} -f observability/docker-compose.observability.yml down -v --remove-orphans 2>/dev/null || true"
 
-  # --- terraform (infra; pass ENV=dev|prod, default dev) --------------------
   terraform:fmt:
     desc: Check Terraform/Terragrunt formatting
     preconditions:
@@ -190,9 +161,6 @@ tasks:
           terraform -chdir="$d" validate -no-color
         done
 
-  # ENV=dev|prod drive the floci/cloud stacks via Terragrunt (the GitOps pipeline
-  # path). ENV=local drives the standalone docker-compose dev stack
-  # (infra/terraform/local) via plain Terraform — used by `task docker:up`.
   terraform:init:
     desc: 'Init an environment (ENV=dev|prod via Terragrunt; ENV=local = docker-compose floci stack)'
     preconditions:
@@ -235,10 +203,7 @@ tasks:
           terraform -chdir={{.TF_DIR}}/local apply -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}}
         else
           command -v terragrunt >/dev/null 2>&1 || { echo "Terragrunt not found. Install: https://terragrunt.gruntwork.io/docs/getting-started/install/" >&2; exit 1; }
-          # floci/LocalStack races on concurrent creates: e.g. 3 public
-          # aws_route_table_association against one route table fire at once and
-          # the Nth never reports 'associated', hanging until the 5m timeout.
-          # Serialize the graph on floci; real AWS keeps the default parallelism.
+          # floci/LocalStack races on concurrent creates — serialize the graph; real AWS keeps default parallelism.
           PFLAG=""
           [ "$(printf '%s' "${FLOCI:-false}" | tr '[:upper:]' '[:lower:]')" = "true" ] && PFLAG="-parallelism=1"
           ( cd {{.TG_DIR}}/{{.ENV}} && terragrunt apply -input=false {{if eq .AUTO_APPROVE "true"}}-auto-approve{{end}} $PFLAG )
@@ -277,8 +242,7 @@ tasks:
       - sh: command -v trivy
         msg: "Trivy not found. Install: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin"
     cmds:
-      # Skip infra/terraform/local — the docker-compose floci stack is deliberately
-      # un-hardened (no KMS/encryption/lifecycle) for emulator compatibility.
+      # Skip infra/terraform/local — the docker-compose floci stack is deliberately un-hardened for emulator compatibility.
       - trivy config --severity HIGH,CRITICAL --exit-code 1 --ignorefile {{.TF_DIR}}/.trivyignore --skip-dirs {{.TF_DIR}}/local {{.TF_DIR}}
 
   terraform:costs:
@@ -287,14 +251,7 @@ tasks:
       - sh: command -v infracost
         msg: "Infracost not found. Install: curl -fsSL https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh"
     cmds:
-      # `scan` replaces the deprecated `breakdown`; path is positional, and the
-      # infra/terraform stack is scanned as a whole. The environments reference
-      # their modules via ../../modules, so infracost must scan a path that
-      # CONTAINS both `environments/` and `modules/` — scanning a single
-      # environments/<env> subdir makes those relative module sources resolve
-      # "outside the repository" and every module fails to load. infracost's
-      # per-project breakdown still reports dev / prod / local separately.
-      # If unauthenticated, infracost itself prompts the free browser login.
+      # Scan the whole stack: environments reference modules via ../../modules, so a path containing both must be scanned or modules resolve "outside the repository".
       - infracost scan {{.TF_DIR}}
 
   IaC:verify:
@@ -307,13 +264,8 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        # floci is the source of truth here (test/test creds, :4566 — same as the
-        # pipeline and the terragrunt floci backend). Override with AWS_ENDPOINT_URL.
         EP="${AWS_ENDPOINT_URL:-${FLOCI_ENDPOINT:-http://localhost:4566}}"
         export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION={{.AWS_REGION}}
-        # State is kept in floci S3 between runs; the local copy can be stale. Pull
-        # the authoritative copy to a temp file (read-only — never touches the
-        # working state dir), falling back to the local checkout if S3 is down.
         SF="$(mktemp)"
         BUCKET="todo-app-tfstate-{{.ENV}}"; KEY="{{.ENV}}/terraform.tfstate"
         if aws --endpoint-url "$EP" s3 cp "s3://$BUCKET/$KEY" "$SF" >/dev/null 2>&1; then
@@ -331,7 +283,6 @@ tasks:
         echo "  state source   : $SRC"
         echo
 
-        # --- AWS managed resources (driven by what the state actually tracks) ---
         set +e
         EP="$EP" SF="$SF" python3 - <<'PY'
         import json, os, subprocess, sys
@@ -339,7 +290,6 @@ tasks:
         state = json.load(open(sf))
         res = state.get("resources", [])
 
-        # (state type, label, attribute holding the identifier, aws probe args)
         PROBES = [
             ("aws_ecr_repository",        "ECR repository",        "name",   ["ecr", "describe-repositories", "--repository-names"]),
             ("aws_secretsmanager_secret", "Secrets Manager secret","name",   ["secretsmanager", "describe-secret", "--secret-id"]),
@@ -378,7 +328,6 @@ tasks:
         PY
         AWS_RC=$?
 
-        # --- EKS workload cluster: the k3s container + node readiness ---
         echo
         K3S="floci-eks-{{.PROJECT}}-{{.ENV}}"
         EKS_RC=0
@@ -410,15 +359,6 @@ tasks:
           exit 1
         fi
 
-  # --- ecr (container registry; works with real AWS ECR or floci) -----------
-  # For floci, prefix with: AWS_PROFILE=floci AWS_ENDPOINT_URL=http://localhost:4566
-  # Each ecr task inlines this resolution of REGISTRY (host[:port]) + REPO_URI so
-  # CLI-passed vars (AWS_ENDPOINT_URL, ECR_REPO, ...) propagate correctly. It
-  # prefers the repository's real repositoryUri — correct for both AWS ECR and
-  # floci (whose registry host is non-standard, e.g. ...ecr.<region>.localhost:5000)
-  # — and falls back to the standard account-derived registry when the repo
-  # doesn't exist yet:
-  #   EP=...; REGISTRY=...; REPO_URI=...
   ecr:login:
     desc: 'Authenticate Docker to ECR (host derived from the repo URI / account)'
     preconditions:
@@ -457,7 +397,6 @@ tasks:
       - |
         set -euo pipefail
         EP="{{if .AWS_ENDPOINT_URL}}--endpoint-url {{.AWS_ENDPOINT_URL}}{{end}}"
-        # Ensure the repository exists (no-op if it already does).
         aws $EP --region {{.AWS_REGION}} ecr describe-repositories --repository-names {{.ECR_REPO}} >/dev/null 2>&1 \
           || aws $EP --region {{.AWS_REGION}} ecr create-repository --repository-name {{.ECR_REPO}} >/dev/null
         REPO_URI=$(aws $EP --region {{.AWS_REGION}} ecr describe-repositories --repository-names {{.ECR_REPO}} \
@@ -477,23 +416,13 @@ tasks:
           --query 'repositories[0].repositoryUri' --output text)
         docker pull "${REPO_URI}:{{.IMAGE_TAG}}"
 
-  # --- k8s ------------------------------------------------------------------
   k8s:expose-todo-db:
     desc: 'Port-forward the todo-app Postgres on the floci-EKS cluster (ENV=dev|prod) to localhost:15432 (DBeaver/psql: todo/todo, db todo)'
     cmds:
-      # Postgres now runs on the floci-EKS cluster, not kind — use its kubeconfig.
       - task: eks:kubeconfig
         vars: { ENV: "{{.ENV}}" }
       - KUBECONFIG=/tmp/floci-eks-{{.ENV}}.kubeconfig kubectl -n todo-app port-forward svc/postgres 15432:5432
 
-  # --- floci-EKS cluster (the k3s container Terraform/Terragrunt spins up).
-  # Ownership split: THIS repo owns its deployable content — the Helm chart, its
-  # Argo Application manifests (infra/k8s/gitops/applications/), and its own
-  # Grafana dashboards (./observability) — plus building and loading its image.
-  # The PLATFORM (local-gitops) bootstraps the cluster end-to-end (MetalLB +
-  # ingress-nginx + Argo CD + Applications) via its `eks:bootstrap` task; the CD
-  # pipeline calls it with APP_DIR=<this checkout> so it can apply the manifests
-  # above. The app's remaining EKS tasks here are image-load + local helpers.
   eks:load-image:
     desc: 'Import an app image (IMAGE_TAG) into the floci-EKS workload cluster containerd (ENV=dev|prod). k3s equivalent of `kind load`.'
     vars:
@@ -507,17 +436,8 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        # Also load the image under the env placeholder tag (:dev/:prod).
-        # values-<env>.yaml commits `tag: <env>` as a placeholder that the CD job
-        # rewrites to the build SHA. Argo's auto-sync can briefly render the
-        # immutable db-init Job at local/todo-app:<env> on the pre-bump commit
-        # (before the SHA bump lands); keeping :<env> present in containerd makes
-        # that reference pullable (IfNotPresent), avoiding the ImagePullBackOff
-        # sync wedge. The placeholder may lag a build, but the bump moves both the
-        # Job and the Deployment to the SHA moments later.
+        # Also load the :<env> placeholder tag: Argo can render the db-init Job at local/todo-app:<env> before the SHA bump lands; keeping it in containerd avoids an ImagePullBackOff wedge.
         docker tag "{{.APP_IMAGE}}:{{.IMAGE_TAG}}" "{{.APP_IMAGE}}:{{.ENV}}"
-        # Stream both tags into k3s's containerd (namespace k8s.io) in one import,
-        # so pods with imagePullPolicy: IfNotPresent run them without a registry pull.
         docker save "{{.APP_IMAGE}}:{{.IMAGE_TAG}}" "{{.APP_IMAGE}}:{{.ENV}}" \
           | docker exec -i "{{.K3S}}" ctr -n k8s.io images import -
         echo "loaded {{.APP_IMAGE}}:{{.IMAGE_TAG}} (+ :{{.ENV}}) into {{.K3S}}"
@@ -553,9 +473,6 @@ tasks:
     cmds:
       - |
         set -e
-        # This repo owns ONLY its app hostname. The platform (local-gitops) owns
-        # the ops-surface DNS (gitea/grafana/argo). Distinct marker so the two
-        # writers never clobber each other's lines.
         [ -w /etc/hosts ] || { echo "need write access to /etc/hosts — run: sudo task eks:hosts" >&2; exit 1; }
         marker="# floci-eks-app"
         tmp=$(mktemp)
@@ -573,10 +490,8 @@ tasks:
       - sh: command -v trivy
         msg: "Trivy not found. Install: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin"
     cmds:
-      # Trivy renders the Helm chart with its default values and scans the manifests.
       - trivy config --severity HIGH,CRITICAL --exit-code 1 infra/k8s/helm
 
-  # --- floci (local AWS emulator; aligns with local-gitops) -----------------
   aws:profile:
     desc: 'Ensure the local "{{.AWS_PROFILE_NAME}}" AWS CLI profile exists (creds test/test)'
     internal: true
@@ -591,7 +506,6 @@ tasks:
         aws configure set output json                      --profile {{.AWS_PROFILE_NAME}}
 
 
-  # --- onboard this app into a running lab (run once, after install:app) ----
   gitea:create-repo:
     desc: 'Create the empty Gitea repo {{.GITEA_NS}}/{{.GITEA_REPO_NAME}} in the running lab (idempotent)'
     cmds:
@@ -632,7 +546,6 @@ tasks:
         next: sudo task eks:hosts  then  task gitea:ship   (DEV(AUTO): ci -> terraform -> cd)
         TXT
 
-  # --- local CI/CD loop (push to lab Gitea; no reinstall) -------------------
   gitea:ship:
     desc: 'Push the current commit to lab Gitea {{.GITEA_NS}}/{{.GITEA_REPO_NAME}}:{{.GITEA_BRANCH}} to trigger the pipeline (no reinstall)'
     cmds:
@@ -710,7 +623,6 @@ tasks:
         [ -n "$ready" ] || { echo "ERROR: Aurora (floci-rds-todo-aurora) never became ready" >&2; exit 1; }
         echo "aurora ready"
 
-  # --- atlas (DB schema migrations via the Atlas Docker image) --------------
   atlas:migrate:
     desc: 'Apply pending Atlas migrations to the running Postgres (creates tables + RLS)'
     preconditions:
@@ -751,7 +663,6 @@ tasks:
     cmds:
       - docker run --rm -v "$PWD/migrations:/work" -w /work {{.ATLAS_IMAGE}} migrate hash --dir file://versions
 
-  # --- docs (mkdocs project documentation site; separate from FastAPI /docs) -
   docs:serve:
     desc: 'Serve the mkdocs documentation site at http://127.0.0.1:8001 (API uses :8000)'
     cmds:
@@ -762,7 +673,6 @@ tasks:
     cmds:
       - "{{.PY}} --group docs mkdocs build --strict"
 
-  # --- datastore access (floci-backed Aurora / ElastiCache) -----------------
   aurora:cli:
     desc: 'Open a psql shell on the floci Aurora (Postgres) backing'
     cmds:
@@ -773,13 +683,11 @@ tasks:
     cmds:
       - docker exec -it floci-valkey-todo-redis valkey-cli
 
-  # --- seed -----------------------------------------------------------------
   seed:demo:
     desc: 'Run the demo-data seeder init container against the running stack (idempotent)'
     cmds:
       - "{{.COMPOSE}} run --rm seed"
 
-  # --- docker ---------------------------------------------------------------
   docker:_bringup:
     internal: true
     deps: [deps:check]
@@ -802,7 +710,6 @@ tasks:
     cmds:
       - task: clean:cache
       - task: docker:_bringup
-      # Stream the API logs (Ctrl+C to detach; containers keep running detached).
       - "{{.COMPOSE}} logs -f app"
 
   docker:down:
@@ -815,8 +722,6 @@ tasks:
     desc: Remove ALL todo-app docker resources — containers, images, volumes, networks (keeps local-gitops)
     cmds:
       - "{{.COMPOSE}} down -v --remove-orphans 2>/dev/null || true"
-      # Sweep anything left named/tagged for this app; spares the local-gitops
-      # floci and the gitops/todo-app image.
       - |
         set -e
         ids=$(docker ps -aq --filter "name=todo-app" 2>/dev/null || true)

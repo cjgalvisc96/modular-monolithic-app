@@ -37,8 +37,7 @@ runs:
         KUBECTL_VERSION=v1.30.4
         HELM_VERSION=v3.15.4
         TERRAFORM_VERSION=1.9.8
-        # v1.x for the `terragrunt hcl format` command (task terraform:fmt);
-        # v0.67 forwards `hcl` to terraform and fails. Matches the local lab.
+        # v1.x needed for `terragrunt hcl format`; v0.67 forwards `hcl` to terraform and fails.
         TERRAGRUNT_VERSION=v1.0.7
         TASK_VERSION=v3.40.1
         if ! command -v kubectl >/dev/null 2>&1; then
@@ -70,9 +69,7 @@ runs:
       run: |
         set -euo pipefail
         TRIVY_VERSION=0.71.2
-        # trivy: IaC misconfiguration scanner (task terraform:trivy). Direct
-        # release tarball (asset name: trivy_<ver>_Linux-64bit.tar.gz) — the
-        # contrib install.sh resolves bogus versions to a 404, so pin + curl.
+        # Pin + curl the release tarball directly — the contrib install.sh resolves bogus versions to a 404.
         if ! command -v trivy >/dev/null 2>&1; then
           tmp=$(mktemp -d)
           curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | tar -xz -C "$tmp"
