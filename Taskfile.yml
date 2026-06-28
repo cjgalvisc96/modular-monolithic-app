@@ -608,11 +608,20 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        # Stream the image straight into k3s's containerd (namespace k8s.io), so
-        # pods with imagePullPolicy: IfNotPresent run it without a registry pull.
-        docker save "{{.APP_IMAGE}}:{{.IMAGE_TAG}}" \
+        # Also load the image under the env placeholder tag (:dev/:prod).
+        # values-<env>.yaml commits `tag: <env>` as a placeholder that the CD job
+        # rewrites to the build SHA. Argo's auto-sync can briefly render the
+        # immutable db-init Job at local/todo-app:<env> on the pre-bump commit
+        # (before the SHA bump lands); keeping :<env> present in containerd makes
+        # that reference pullable (IfNotPresent), avoiding the ImagePullBackOff
+        # sync wedge. The placeholder may lag a build, but the bump moves both the
+        # Job and the Deployment to the SHA moments later.
+        docker tag "{{.APP_IMAGE}}:{{.IMAGE_TAG}}" "{{.APP_IMAGE}}:{{.ENV}}"
+        # Stream both tags into k3s's containerd (namespace k8s.io) in one import,
+        # so pods with imagePullPolicy: IfNotPresent run them without a registry pull.
+        docker save "{{.APP_IMAGE}}:{{.IMAGE_TAG}}" "{{.APP_IMAGE}}:{{.ENV}}" \
           | docker exec -i "{{.K3S}}" ctr -n k8s.io images import -
-        echo "loaded {{.APP_IMAGE}}:{{.IMAGE_TAG}} into {{.K3S}}"
+        echo "loaded {{.APP_IMAGE}}:{{.IMAGE_TAG}} (+ :{{.ENV}}) into {{.K3S}}"
 
   eks:kubeconfig:
     desc: 'Write a kubeconfig for the floci-EKS workload cluster (ENV=dev|prod) to KUBECONFIG_OUT (default /tmp/floci-eks-<env>.kubeconfig)'
