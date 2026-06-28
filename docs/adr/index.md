@@ -28,4 +28,4 @@ change. Each ADR records a decision, the context that forced it, and the consequ
 | [0006](0006-least-privilege-iam-irsa.md) | Least-privilege IAM with one IRSA role per workload | Accepted |
 
 These records correspond to the cross-cutting decisions captured in the repository's root planning
-docs (`enterpise-plan.md`, `copier-plan.md`).
+docs (`copier-plan.md`).

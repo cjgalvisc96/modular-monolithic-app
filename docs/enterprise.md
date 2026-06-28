@@ -3,7 +3,6 @@
 The production target for this application is a **full deployment on a real AWS account**.
 floci (LocalStack) is only the local inner-loop emulator — `var.floci=true` gates off the AWS
 services LocalStack cannot run and substitutes in-cluster Postgres/Redis plus DEBUG dev-auth.
-The complete, phase-by-phase roadmap is `enterpise-plan.md` at the repository root.
 
 ## Target AWS architecture
 

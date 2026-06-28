@@ -6,7 +6,7 @@ testable, independently reasoned about, and — in principle — independently e
 services if that ever becomes necessary.
 
 This page is a high-level summary. The authoritative narrative lives in the repository root planning
-docs — `enterpise-plan.md` and `copier-plan.md`. Read those for the full detail; this page orients
+docs — `copier-plan.md`. Read those for the full detail; this page orients
 you.
 
 ## Design principles
