@@ -1,0 +1,197 @@
+_min_copier_version: "9.0.0"
+_subdirectory: copier/template
+_templates_suffix: .jinja
+_answers_file: .copier-answers.yml
+
+_envops:
+  undefined: jinja2.StrictUndefined
+
+_exclude:
+  - "*.pyc"
+  - "__pycache__"
+  - ".git"
+  - ".venv"
+  - "site"
+
+_skip_if_exists:
+  - .env
+  - .copier-answers.yml
+
+_jinja_extensions:
+  - copier_templates_extensions.TemplateExtensionLoader
+  - jinja2_time.TimeExtension
+
+_message_before_copy: |
+  Scaffolding a DDD modular-monolith service.
+  Press Enter to accept defaults (the full reference architecture).
+
+_message_after_copy: |
+  Project "{{ project_name }}" generated at {{ _copier_conf.dst_path }}.
+  Next:  uv sync  ->  task help
+
+_tasks:
+  - command: "git init -q"
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: "bash {{ _copier_conf.src_path }}/copier/tasks/check_tools.sh .copier-answers.yml"
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: "uv venv && uv sync"
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: "git add -A && git commit -q -m 'chore: initial scaffold from copier-todo-ddd'"
+    when: "{{ _copier_operation == 'copy' }}"
+
+project_name:
+  type: str
+  help: Human-readable project name
+  validator: "{% if not project_name %}Required{% endif %}"
+
+project_slug:
+  type: str
+  help: DNS/image-safe slug
+  default: "{% include 'copier/includes/slugify.jinja' %}"
+  validator: >-
+    {% if project_slug != (project_slug | lower) or ' ' in project_slug or '_' in project_slug %}Use lowercase letters, digits and dashes.{% endif %}
+
+module_name:
+  type: str
+  help: Python package name
+  default: "{% include 'copier/includes/module-name.jinja' %}"
+  validator: >-
+    {% if module_name != (module_name | lower) or ' ' in module_name or '-' in module_name %}Use lowercase letters, digits and underscores.{% endif %}
+
+author_name:
+  type: str
+  help: Author / team name
+  default: ""
+
+author_email:
+  type: str
+  help: Author email
+  default: ""
+  validator: >-
+    {% if author_email and ('@' not in author_email or '.' not in author_email) %}Enter a valid email.{% endif %}
+
+python_version:
+  type: str
+  help: Python version
+  choices: ["3.12", "3.13", "3.14"]
+  default: "3.14"
+
+owner:
+  type: str
+  help: Resource owner tag
+  default: "platform-team"
+
+bounded_contexts:
+  type: str
+  help: Bounded contexts to generate (users + tasks are mandatory; shared is always included)
+  multiselect: true
+  choices:
+    - users
+    - tasks
+    - ai
+  default: ["users", "tasks", "ai"]
+
+include_ai:
+  type: bool
+  default: "{{ 'ai' in bounded_contexts }}"
+  when: false
+
+auth_provider:
+  type: str
+  help: Authentication provider
+  choices: ["cognito"]
+  default: "cognito"
+
+enable_rls:
+  type: bool
+  help: PostgreSQL Row-Level Security for multi-tenancy
+  default: true
+
+include_docker:
+  type: bool
+  help: Dockerfile + docker-compose + docker:* tasks
+  default: true
+
+include_k8s:
+  type: bool
+  help: Helm chart + GitOps Application manifests
+  default: true
+
+include_terraform:
+  type: bool
+  help: Terraform modules + Terragrunt environments
+  default: true
+
+cloud_modules:
+  type: str
+  help: Terraform cloud modules to generate
+  multiselect: true
+  when: "{{ include_terraform }}"
+  choices:
+    - vpc
+    - eks
+    - ecr
+    - redis
+    - aurora
+    - route53
+    - secrets_manager
+    - cognito
+    - cdn
+    - s3
+    - eventbridge
+    - sqs_sns
+    - bedrock
+    - iam
+  default:
+    - vpc
+    - eks
+    - ecr
+    - redis
+    - aurora
+    - route53
+    - secrets_manager
+    - cognito
+    - cdn
+    - s3
+    - eventbridge
+    - sqs_sns
+    - bedrock
+    - iam
+  validator: >-
+    {% if 'bedrock' in cloud_modules and not include_ai %}The bedrock module requires the ai bounded context.{% endif %}
+
+include_observability:
+  type: bool
+  help: OpenTelemetry wiring + Grafana dashboards
+  default: true
+
+include_cli:
+  type: bool
+  help: Typer CLI presentation layer
+  default: true
+
+include_governance:
+  type: bool
+  help: ruff + pyright + vulture + import-linter gates
+  default: true
+
+coverage_threshold:
+  type: int
+  help: Minimum test coverage percent
+  default: 97
+  validator: "{% if coverage_threshold < 0 or coverage_threshold > 100 %}0-100{% endif %}"
+
+include_mkdocs:
+  type: bool
+  help: MkDocs documentation site
+  default: true
+
+include_agents:
+  type: bool
+  help: .agents harness
+  default: true
+
+include_claude:
+  type: bool
+  help: .claude skills/rules/commands
+  default: true

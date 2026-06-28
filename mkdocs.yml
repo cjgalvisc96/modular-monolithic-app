@@ -43,6 +43,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Launch: launch.md
+  - Copier Template: copier.md
   - Architecture:
       - Overview: architecture/overview.md
       - Bounded Contexts: architecture/bounded-contexts.md

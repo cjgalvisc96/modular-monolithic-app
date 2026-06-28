@@ -19,15 +19,13 @@ The same principles the app follows (SOLID, DRY, KISS, YAGNI) apply to the templ
 
 ## 1. Template Repository Layout
 
-One template = one Git repo (Copier's recommendation, required for updates). Metadata lives at the root; the renderable tree lives under `template/` via `_subdirectory`.
+`copier.yml` lives at the repo root (so `copier copy gh:org/repo` resolves it); everything else is
+tidied under `copier/`, with `_subdirectory: copier/template` pointing at the renderable tree.
 
 ```
-copier-todo-ddd/                          # the TEMPLATE repo (not the generated app)
-├── copier.yml                            # questionnaire + settings
+copier.yml                                # questionnaire + settings (at repo root)
+copier/
 ├── README.md                             # how to use the template
-├── CHANGELOG.md                          # template version history (drives updates)
-├── LICENSE
-├── .gitignore                            # ignore rules for the TEMPLATE repo
 ├── includes/                             # Jinja macros/partials (excluded from render)
 │   ├── slugify.jinja
 │   ├── module-name.jinja
