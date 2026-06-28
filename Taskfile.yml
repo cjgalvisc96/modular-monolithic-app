@@ -282,6 +282,119 @@ tasks:
       # If unauthenticated, infracost itself prompts the free browser login.
       - infracost scan {{.TF_DIR}}/environments/{{.ENV}}
 
+  IaC:verify:
+    desc: 'Verify the deployed IaC for an env is live on floci (ENV=dev|prod): reads the Terragrunt state (floci S3, or local fallback) and probes each managed resource + the EKS cluster/node. Read-only.'
+    preconditions:
+      - sh: command -v aws
+        msg: "AWS CLI not found. Install: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
+      - sh: command -v kubectl
+        msg: "kubectl not found. Install: https://kubernetes.io/docs/tasks/tools/"
+    cmds:
+      - |
+        set -euo pipefail
+        # floci is the source of truth here (test/test creds, :4566 — same as the
+        # pipeline and the terragrunt floci backend). Override with AWS_ENDPOINT_URL.
+        EP="${AWS_ENDPOINT_URL:-${FLOCI_ENDPOINT:-http://localhost:4566}}"
+        export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION={{.AWS_REGION}}
+        # State is kept in floci S3 between runs; the local copy can be stale. Pull
+        # the authoritative copy to a temp file (read-only — never touches the
+        # working state dir), falling back to the local checkout if S3 is down.
+        SF="$(mktemp)"
+        BUCKET="todo-app-tfstate-{{.ENV}}"; KEY="{{.ENV}}/terraform.tfstate"
+        if aws --endpoint-url "$EP" s3 cp "s3://$BUCKET/$KEY" "$SF" >/dev/null 2>&1; then
+          SRC="floci S3 (s3://$BUCKET/$KEY)"
+        elif [ -s "{{.TF_DIR}}/.floci-state/{{.ENV}}/terraform.tfstate" ]; then
+          cp "{{.TF_DIR}}/.floci-state/{{.ENV}}/terraform.tfstate" "$SF"
+          SRC="local {{.TF_DIR}}/.floci-state/{{.ENV}}"
+        else
+          echo "ERROR: no Terraform state for ENV={{.ENV}} (neither floci S3 nor local)." >&2
+          echo "       Provision it first: task terraform:apply ENV={{.ENV}}" >&2
+          exit 1
+        fi
+        echo "IaC verify — ENV={{.ENV}}"
+        echo "  floci endpoint : $EP"
+        echo "  state source   : $SRC"
+        echo
+
+        # --- AWS managed resources (driven by what the state actually tracks) ---
+        set +e
+        EP="$EP" SF="$SF" python3 - <<'PY'
+        import json, os, subprocess, sys
+        ep, sf = os.environ["EP"], os.environ["SF"]
+        state = json.load(open(sf))
+        res = state.get("resources", [])
+
+        # (state type, label, attribute holding the identifier, aws probe args)
+        PROBES = [
+            ("aws_ecr_repository",        "ECR repository",        "name",   ["ecr", "describe-repositories", "--repository-names"]),
+            ("aws_secretsmanager_secret", "Secrets Manager secret","name",   ["secretsmanager", "describe-secret", "--secret-id"]),
+            ("aws_cloudwatch_event_bus",  "EventBridge bus",       "name",   ["events", "describe-event-bus", "--name"]),
+            ("aws_sqs_queue",             "SQS queue",             "name",   ["sqs", "get-queue-url", "--queue-name"]),
+            ("aws_sns_topic",             "SNS topic",             "arn",    ["sns", "get-topic-attributes", "--topic-arn"]),
+            ("aws_s3_bucket",             "S3 bucket",             "bucket", ["s3api", "head-bucket", "--bucket"]),
+            ("aws_eks_cluster",           "EKS cluster",           "name",   ["eks", "describe-cluster", "--name"]),
+        ]
+
+        def instances(t):
+            out = []
+            for r in res:
+                if r.get("type") == t:
+                    out += r.get("instances", [])
+            return out
+
+        fails = 0
+        checked = 0
+        for typ, label, attr, args in PROBES:
+            for inst in instances(typ):
+                ident = inst.get("attributes", {}).get(attr)
+                if not ident:
+                    continue
+                checked += 1
+                r = subprocess.run(
+                    ["aws", "--endpoint-url", ep, *args, ident],
+                    capture_output=True, text=True,
+                )
+                ok = r.returncode == 0
+                fails += 0 if ok else 1
+                print(f"  [{'ok' if ok else 'MISSING'}] {label}: {ident}")
+        if checked == 0:
+            print("  (no managed AWS resources found in state for this env)")
+        sys.exit(1 if fails else 0)
+        PY
+        AWS_RC=$?
+
+        # --- EKS workload cluster: the k3s container + node readiness ---
+        echo
+        K3S="floci-eks-{{.PROJECT}}-{{.ENV}}"
+        EKS_RC=0
+        RUNNING=$(docker inspect -f '{{`{{.State.Running}}`}}' "$K3S" 2>/dev/null || echo missing)
+        if [ "$RUNNING" != "true" ]; then
+          echo "  [MISSING] EKS k3s container $K3S ($RUNNING)"
+          EKS_RC=1
+        else
+          PORT=$(docker inspect -f '{{`{{(index (index .NetworkSettings.Ports "6443/tcp") 0).HostPort}}`}}' "$K3S")
+          KC="$(mktemp)"
+          docker exec "$K3S" cat /etc/rancher/k3s/k3s.yaml \
+            | sed "s#https://127.0.0.1:6443#https://localhost:${PORT}#" > "$KC"
+          READY=$(KUBECONFIG="$KC" kubectl get nodes \
+            -o jsonpath="{.items[*].status.conditions[?(@.type=='Ready')].status}" 2>/dev/null)
+          if printf '%s' "$READY" | grep -q True; then
+            echo "  [ok] EKS k3s container $K3S — node Ready"
+          else
+            echo "  [MISSING] EKS k3s container $K3S — node not Ready (${READY:-unreachable})"
+            EKS_RC=1
+          fi
+        fi
+
+        echo
+        if [ "$AWS_RC" -eq 0 ] && [ "$EKS_RC" -eq 0 ]; then
+          echo "✅ IaC verified — every tracked resource for ENV={{.ENV}} is live."
+        else
+          echo "❌ IaC verify FAILED for ENV={{.ENV}} — see [MISSING] lines above." >&2
+          echo "   Re-provision with: task terraform:apply ENV={{.ENV}}" >&2
+          exit 1
+        fi
+
   # --- ecr (container registry; works with real AWS ECR or floci) -----------
   # For floci, prefix with: AWS_PROFILE=floci AWS_ENDPOINT_URL=http://localhost:4566
   # Each ecr task inlines this resolution of REGISTRY (host[:port]) + REPO_URI so
