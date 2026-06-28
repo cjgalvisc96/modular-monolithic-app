@@ -72,5 +72,4 @@ These hold everywhere in the codebase and are enforced by tooling, not conventio
 - **Tenancy boundary**: PostgreSQL RLS, not application `WHERE` filters.
 - **IAM**: one least-privilege IRSA role per workload.
 
-The full design is described in the repository's root planning docs — `enterpise-plan.md` and
-`copier-plan.md`.
+The full design is described in the repository's root planning doc `enterpise-plan.md`.

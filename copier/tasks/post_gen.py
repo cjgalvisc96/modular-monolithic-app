@@ -1,16 +1,8 @@
-"""Post-generation helpers invoked by copier `_tasks`.
-
-Kept intentionally small: copier handles file rendering and conditional
-inclusion; this only does the few imperative steps copier cannot express
-declaratively (e.g. answer-driven migrations across template versions).
-"""
-
 import sys
 
 
 def migrate_contexts() -> None:
-    """Placeholder for a `_migrations` step that reshapes answers between
-    template major versions. No-op until the first breaking template change."""
+    pass
 
 
 COMMANDS = {"migrate-contexts": migrate_contexts}
