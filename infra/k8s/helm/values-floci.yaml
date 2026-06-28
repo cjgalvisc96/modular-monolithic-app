@@ -5,7 +5,7 @@
 # tag + config in values-<env>.yaml untouched:
 #   - no External Secrets Operator on the workload cluster -> a plain Secret is
 #     rendered from `secrets` (DB_USER/DB_PASSWORD/REDIS_PASSWORD)
-#   - ingress-nginx IS installed on the EKS cluster (eks:bootstrap-net) with a
+#   - ingress-nginx IS installed on the EKS cluster (platform eks:bootstrap) with a
 #     dedicated MetalLB IP (dev 172.18.255.230 / prod .240); the chart Ingress
 #     stays on, host comes from values-<env>.yaml (todo-app.<env>.local)
 #   - no IRSA on floci EKS (enable_irsa=false) -> drop the role-arn annotations

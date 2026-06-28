@@ -169,5 +169,12 @@ jobs:
             git push "${scheme}://x-access-token:${{ github.token }}@${host}/${GITHUB_REPOSITORY}.git" HEAD:main
           fi
 
-      - name: Bootstrap the floci-EKS prod cluster (MetalLB + ingress-nginx + Argo CD + Applications)
-        run: task eks:bootstrap ENV=prod
+      - name: Register the app with the floci-EKS prod Argo CD
+        # The PLATFORM (local-gitops at $LOCAL_GITOPS_DIR) already created +
+        # bootstrapped the prod cluster at `task install`. Promote only registers
+        # the app's repo cred + Argo Applications (APP_DIR=this checkout). Runs
+        # AFTER the bump so Argo's first sync uses the loaded tag.
+        run: |
+          set -euo pipefail
+          cd "$LOCAL_GITOPS_DIR"
+          task eks:register-app ENV=prod APP_DIR="$GITHUB_WORKSPACE"

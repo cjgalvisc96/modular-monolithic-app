@@ -1,16 +1,16 @@
 output "vpc_id" {
-  description = "VPC ID."
-  value       = module.vpc.vpc_id
+  description = "VPC ID (null on floci — the platform owns the k3s workload cluster)."
+  value       = one(module.vpc[*].vpc_id)
 }
 
 output "eks_cluster_name" {
-  description = "EKS cluster name."
-  value       = module.eks.cluster_name
+  description = "EKS cluster name (null on floci)."
+  value       = one(module.eks[*].cluster_name)
 }
 
 output "eks_oidc_provider_arn" {
-  description = "EKS OIDC provider ARN (IRSA)."
-  value       = module.eks.oidc_provider_arn
+  description = "EKS OIDC provider ARN (IRSA; null on floci)."
+  value       = one(module.eks[*].oidc_provider_arn)
 }
 
 output "ecr_repository_url" {

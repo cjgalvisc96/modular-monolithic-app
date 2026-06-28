@@ -45,6 +45,10 @@ locals {
 ############################################
 module "vpc" {
   source = "../../modules/vpc"
+  # floci: the EKS workload cluster is a k3s container the PLATFORM (local-gitops)
+  # stands up, not a real EKS in this VPC — so the VPC (and EKS below) are parity-
+  # only and disabled on floci, exactly like aurora/redis/cognito.
+  count = var.floci ? 0 : 1
 
   name                 = local.name
   cidr_block           = "10.20.0.0/16"
@@ -62,13 +66,14 @@ module "vpc" {
 ############################################
 module "eks" {
   source = "../../modules/eks"
+  count  = var.floci ? 0 : 1 # floci: k3s container owned by the platform (see vpc)
 
   cluster_name       = local.name
   kubernetes_version = "1.30"
   enable_irsa        = !var.floci
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
-  public_subnet_ids  = module.vpc.public_subnet_ids
+  vpc_id             = one(module.vpc[*].vpc_id)
+  private_subnet_ids = one(module.vpc[*].private_subnet_ids)
+  public_subnet_ids  = one(module.vpc[*].public_subnet_ids)
 
   endpoint_public_access = false # prod: private API endpoint
   node_instance_types    = ["m6i.xlarge"]
@@ -102,14 +107,14 @@ module "aurora" {
   count  = var.floci ? 0 : 1
 
   name                       = local.name
-  vpc_id                     = module.vpc.vpc_id
-  vpc_cidr                   = module.vpc.vpc_cidr_block
-  private_subnet_ids         = module.vpc.private_subnet_ids
+  vpc_id                     = one(module.vpc[*].vpc_id)
+  vpc_cidr                   = one(module.vpc[*].vpc_cidr_block)
+  private_subnet_ids         = one(module.vpc[*].private_subnet_ids)
   publicly_accessible        = false
   master_password            = var.db_master_password
   instance_class             = "db.r6g.large"
   instance_count             = 2
-  allowed_security_group_ids = [module.eks.cluster_security_group_id]
+  allowed_security_group_ids = [one(module.eks[*].cluster_security_group_id)]
   backup_retention_period    = 30
   deletion_protection        = true
   skip_final_snapshot        = false
@@ -121,10 +126,10 @@ module "redis" {
   count  = var.floci ? 0 : 1
 
   name                       = local.name
-  vpc_id                     = module.vpc.vpc_id
-  vpc_cidr                   = module.vpc.vpc_cidr_block
-  private_subnet_ids         = module.vpc.private_subnet_ids
-  allowed_security_group_ids = [module.eks.cluster_security_group_id]
+  vpc_id                     = one(module.vpc[*].vpc_id)
+  vpc_cidr                   = one(module.vpc[*].vpc_cidr_block)
+  private_subnet_ids         = one(module.vpc[*].private_subnet_ids)
+  allowed_security_group_ids = [one(module.eks[*].cluster_security_group_id)]
   node_type                  = "cache.r6g.large"
   num_cache_clusters         = 2
   automatic_failover_enabled = true
@@ -251,8 +256,8 @@ module "iam" {
   count  = var.floci ? 0 : 1
 
   name              = local.name
-  oidc_provider_arn = module.eks.oidc_provider_arn
-  oidc_provider_url = module.eks.oidc_provider_url
+  oidc_provider_arn = one(module.eks[*].oidc_provider_arn)
+  oidc_provider_url = one(module.eks[*].oidc_provider_url)
   namespace         = local.k8s_namespace
 
   aurora_cluster_resource_id = local.aurora_cluster_resource_id

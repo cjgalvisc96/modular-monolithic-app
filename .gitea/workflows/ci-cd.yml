@@ -155,7 +155,8 @@ jobs:
       APP_IMAGE: local/todo-app
       ECR_REPO: todo-app
       # The platform (local-gitops) is bind-mounted here by its runner config;
-      # eks:bootstrap calls its eks:install-argo to install Argo CD into EKS.
+      # the cd job calls its `task eks:bootstrap` (MetalLB + ingress-nginx + Argo
+      # CD + our Applications) with APP_DIR=this checkout.
       LOCAL_GITOPS_DIR: /opt/local-gitops
     steps:
       - uses: actions/checkout@v4
@@ -206,11 +207,16 @@ jobs:
             git push "${scheme}://x-access-token:${{ github.token }}@${host}/${GITHUB_REPOSITORY}.git" HEAD:main
           fi
 
-      - name: Bootstrap the floci-EKS cluster (MetalLB + ingress-nginx + Argo CD + Applications)
-        # Installs the self-contained GitOps stack INTO the floci-EKS cluster and
-        # registers the repo + Applications. Idempotent: a no-op once present.
-        # Runs AFTER the bump so Argo's first sync points at the loaded tag.
-        run: task eks:bootstrap ENV=dev
+      - name: Register the app with the floci-EKS Argo CD
+        # The PLATFORM (local-gitops, bind-mounted at $LOCAL_GITOPS_DIR) already
+        # created + bootstrapped the cluster (MetalLB + ingress + Argo +
+        # observability) at `task install`. The app only registers its repo cred
+        # + Argo Applications, passing APP_DIR=this checkout. Runs AFTER the bump
+        # so Argo's first sync points at the loaded tag.
+        run: |
+          set -euo pipefail
+          cd "$LOCAL_GITOPS_DIR"
+          task eks:register-app ENV=dev APP_DIR="$GITHUB_WORKSPACE"
 
       - name: Handoff to PROD (manual)
         # DEV is green. PROD is the manual gate: launch the "Promote to prod"

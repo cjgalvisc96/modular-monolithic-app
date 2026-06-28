@@ -1,7 +1,7 @@
 # Argo CD Application — todo-app on the prod floci-EKS (k3s) cluster. The EKS
-# cluster runs its own Argo CD (bootstrapped by the promote workflow) and syncs
-# this Application in-cluster. See todo-app-dev.yaml for the onboarding contract;
-# drop a copy into platform-config/envs/prod/.
+# cluster runs its own Argo CD (installed by the platform's eks:bootstrap, which
+# the promote workflow calls) and syncs this Application in-cluster. See
+# todo-app-dev.yaml for the deploy contract.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

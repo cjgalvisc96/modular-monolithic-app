@@ -1,15 +1,13 @@
 # Argo CD Application — todo-app on the dev floci-EKS (k3s) cluster.
 #
 # The floci-provisioned EKS cluster is self-contained: it runs its OWN Argo CD
-# (installed by `task eks:bootstrap-argo ENV=dev` in the pipeline, after the
-# Terragrunt apply), which syncs this Application IN-CLUSTER — exactly like the
-# kind dev/prod clusters do. destination is therefore the in-cluster API.
+# (installed by the platform's `task eks:bootstrap ENV=dev` in the pipeline,
+# after the Terragrunt apply), which syncs this Application IN-CLUSTER. The
+# destination is therefore the in-cluster API.
 #
-# This is the app's registration artifact for the local-gitops platform. Drop a
-# copy into platform-config/envs/dev/ (the root app-of-apps recurses that dir),
-# and add this repo to the dev AppProject's sourceRepos. The 172.18.* address is
-# the platform's default kind-bridge Gitea LB IP; local-gitops rewrites the
-# prefix (subst_net) if its subnet differs.
+# This repo owns the manifest; the platform's eks:bootstrap applies it (kubectl)
+# from APP_DIR and adds the repo credential. The 172.18.* repoURL is the
+# platform's kind-bridge Gitea LB IP.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
